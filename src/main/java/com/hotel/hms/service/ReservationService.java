@@ -1,6 +1,7 @@
 package com.hotel.hms.service;
 
 import com.hotel.hms.common.BusinessException;
+import com.hotel.hms.config.BookingPolicy;
 import com.hotel.hms.dto.ReservationForm;
 import com.hotel.hms.entity.Customer;
 import com.hotel.hms.entity.Reservation;
@@ -30,6 +31,7 @@ public class ReservationService {
     private final CustomerService customerService;
     private final BillService billService;
     private final SerialNumberService serialNumberService;
+    private final BookingPolicy bookingPolicy;
 
     @Transactional(readOnly = true)
     public List<Reservation> search(String keyword, ReservationStatus status) {
@@ -60,7 +62,7 @@ public class ReservationService {
     /** 创建预订 */
     @Transactional
     public Reservation create(ReservationForm form, String operator) {
-        validateDates(form.getCheckInDate(), form.getCheckOutDate());
+        validateDates(form.getCheckInDate(), form.getCheckOutDate(), null);
 
         Room room = roomRepository.findById(form.getRoomId())
                 .orElseThrow(() -> new BusinessException("客房不存在"));
@@ -104,7 +106,8 @@ public class ReservationService {
         if (db.getStatus() != ReservationStatus.BOOKED) {
             throw new BusinessException("只有「已预订」状态的订单可以修改");
         }
-        validateDates(form.getCheckInDate(), form.getCheckOutDate());
+        // 改单时允许保留原有的入住日期（可能是已过期的未到店订单），但不允许新填过去日期
+        validateDates(form.getCheckInDate(), form.getCheckOutDate(), db.getCheckInDate());
 
         Room room = roomRepository.findById(form.getRoomId())
                 .orElseThrow(() -> new BusinessException("客房不存在"));
@@ -227,15 +230,32 @@ public class ReservationService {
     // 内部方法
     // ------------------------------------------------------------------
 
-    private void validateDates(LocalDate checkIn, LocalDate checkOut) {
+    /**
+     * 校验预订日期。
+     *
+     * @param keepCheckIn 改单场景下允许沿用的原入住日期（可能已过期）；新建时传 null
+     */
+    private void validateDates(LocalDate checkIn, LocalDate checkOut, LocalDate keepCheckIn) {
         if (checkIn == null || checkOut == null) {
             throw new BusinessException("请选择入住与离店日期");
         }
         if (!checkOut.isAfter(checkIn)) {
             throw new BusinessException("离店日期必须晚于入住日期");
         }
-        if (ChronoUnit.DAYS.between(checkIn, checkOut) > 365) {
-            throw new BusinessException("单次预订不能超过 365 晚");
+
+        LocalDate today = LocalDate.now();
+        if (checkIn.isBefore(today) && !checkIn.equals(keepCheckIn)) {
+            throw new BusinessException("入住日期不能早于今天（" + today + "），如需补录历史订单请联系管理员");
+        }
+        if (!checkIn.isBefore(today)) {
+            long advance = ChronoUnit.DAYS.between(today, checkIn);
+            if (advance > bookingPolicy.getMaxAdvanceDays()) {
+                throw new BusinessException("最多只能提前 " + bookingPolicy.getMaxAdvanceDays()
+                        + " 天预订，最晚可订至 " + today.plusDays(bookingPolicy.getMaxAdvanceDays()));
+            }
+        }
+        if (ChronoUnit.DAYS.between(checkIn, checkOut) > bookingPolicy.getMaxStayNights()) {
+            throw new BusinessException("单次预订不能超过 " + bookingPolicy.getMaxStayNights() + " 晚");
         }
     }
 

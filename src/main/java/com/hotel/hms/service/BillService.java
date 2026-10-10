@@ -120,10 +120,22 @@ public class BillService {
         }
 
         recalculate(bill);
+
+        // 收款必须足额：押金 + 本次收款 >= 应收合计。否则拒绝结账，
+        // 避免生成"已结账但仍欠款"且被 assertUnpaid 永久锁死的账单。
+        BigDecimal received = deposit.add(paid);
+        BigDecimal total = nvl(bill.getTotalAmount());
+        if (received.compareTo(total) < 0) {
+            throw new BusinessException("收款不足，无法结账：应收 ￥" + money(total)
+                    + "，已收押金 ￥" + money(deposit) + " + 本次收款 ￥" + money(paid)
+                    + " = ￥" + money(received) + "，还差 ￥" + money(total.subtract(received))
+                    + "。如客人暂时无法付清，请先保留账单为「待结账」状态。");
+        }
+
         bill.setDeposit(deposit);
         bill.setPaidAmount(paid);
         bill.setPayMethod(payMethod);
-        bill.setRefundAmount(deposit.add(paid).subtract(bill.getTotalAmount()));
+        bill.setRefundAmount(received.subtract(total));
         bill.setStatus(BillStatus.SETTLED);
         bill.setSettledAt(LocalDateTime.now());
         bill.setOperator(operator);
@@ -148,6 +160,11 @@ public class BillService {
 
     private BigDecimal nvl(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    /** 金额格式化：保留 2 位小数（仅用于提示文案） */
+    private String money(BigDecimal value) {
+        return nvl(value).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 
     private String normalize(String keyword) {

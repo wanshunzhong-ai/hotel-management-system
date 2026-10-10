@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
@@ -28,7 +29,14 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "bill", uniqueConstraints = @UniqueConstraint(name = "uk_bill_no", columnNames = "bill_no"))
+@Table(name = "bill",
+        uniqueConstraints = @UniqueConstraint(name = "uk_bill_no", columnNames = "bill_no"),
+        indexes = {
+                // 未结账单计数、按状态筛选
+                @Index(name = "idx_bill_status", columnList = "status"),
+                // 看板营收统计（按结账时间过滤 / 分组）
+                @Index(name = "idx_bill_settled_at", columnList = "settled_at")
+        })
 public class Bill extends BaseEntity {
 
     @Column(name = "bill_no", nullable = false, length = 32)
@@ -54,7 +62,7 @@ public class Bill extends BaseEntity {
     @Column(name = "other_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal otherAmount = BigDecimal.ZERO;
 
-    /** 押金 */
+    /** 入住时已收的押金（可用于抵扣应收） */
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal deposit = BigDecimal.ZERO;
 
@@ -62,7 +70,12 @@ public class Bill extends BaseEntity {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
-    /** 实收金额（含押金抵扣） */
+    /**
+     * 退房结算时客人<b>补付</b>的金额，<b>不含</b>入住时已收的押金。
+     * <p>
+     * 口径说明：本次结算的总收款 = {@code deposit + paidAmount}，见 {@link #getReceivedAmount()}；
+     * 营收统计请使用 {@link #getTotalAmount()}（应收口径），不要用本字段，否则会漏掉押金抵扣部分。
+     */
     @Column(name = "paid_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
@@ -98,5 +111,13 @@ public class Bill extends BaseEntity {
     /** 折扣/优惠后差额：实收 - 应收 */
     public BigDecimal getDifference() {
         return paidAmount.subtract(totalAmount);
+    }
+
+    /**
+     * 本次结算的总收款 = 押金 + 补付金额。
+     * 结账后 {@code receivedAmount = totalAmount + refundAmount}。
+     */
+    public BigDecimal getReceivedAmount() {
+        return deposit.add(paidAmount);
     }
 }

@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -27,7 +28,18 @@ import java.time.temporal.ChronoUnit;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "reservation", uniqueConstraints = @UniqueConstraint(name = "uk_reservation_order_no", columnNames = "order_no"))
+@Table(name = "reservation",
+        uniqueConstraints = @UniqueConstraint(name = "uk_reservation_order_no", columnNames = "order_no"),
+        indexes = {
+                // 冲突校验：room_id + 日期区间（最左前缀同时覆盖「按房查订单」）
+                @Index(name = "idx_reservation_room_dates", columnList = "room_id, check_in_date, check_out_date"),
+                // 状态筛选 / 在住订单 / 未处理订单计数
+                @Index(name = "idx_reservation_status", columnList = "status"),
+                // 看板「今日预抵 / 预抵明细」
+                @Index(name = "idx_reservation_check_in_date", columnList = "check_in_date"),
+                // 看板「今日预离 / 预离明细」
+                @Index(name = "idx_reservation_check_out_date", columnList = "check_out_date")
+        })
 public class Reservation extends BaseEntity {
 
     /** 订单号，如 RS20261010001 */

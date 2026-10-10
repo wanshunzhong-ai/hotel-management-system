@@ -64,6 +64,11 @@ public class UserService {
         if (!db.getUsername().equals(form.getUsername()) && userRepository.existsByUsername(form.getUsername())) {
             throw new BusinessException("登录账号「" + form.getUsername() + "」已存在");
         }
+        // 变更前先校验：不允许把系统里最后一个启用的管理员改掉
+        Role newRole = form.getRole() == null ? db.getRole() : form.getRole();
+        boolean newEnabled = form.getEnabled() == null || form.getEnabled();
+        assertEnabledAdminRemains(db.getRole(), Boolean.TRUE.equals(db.getEnabled()), newRole, newEnabled, "修改");
+
         db.setUsername(form.getUsername());
         db.setRealName(form.getRealName());
         db.setRole(form.getRole());
@@ -86,9 +91,8 @@ public class UserService {
         if (db.getId().equals(currentUserId)) {
             throw new BusinessException("不能删除当前登录的账号");
         }
-        if (db.getRole() == Role.ADMIN && countEnabledAdmins() <= 1) {
-            throw new BusinessException("系统必须保留至少一个管理员账号");
-        }
+        assertEnabledAdminRemains(db.getRole(), Boolean.TRUE.equals(db.getEnabled()),
+                Role.RECEPTION, false, "删除");
         userRepository.delete(db);
     }
 
@@ -115,10 +119,28 @@ public class UserService {
         userRepository.save(db);
     }
 
+    /**
+     * 校验「变更后系统仍至少保留一个启用状态的管理员」。
+     * 覆盖删除、降级（ADMIN → 其它角色）、停用三条路径。
+     *
+     * @param oldRole      变更前的角色
+     * @param oldEnabled   变更前是否启用
+     * @param newRole      变更后的角色
+     * @param newEnabled   变更后是否启用
+     * @param action       动作描述，用于拼装提示语（修改 / 删除）
+     */
+    private void assertEnabledAdminRemains(Role oldRole, boolean oldEnabled,
+                                           Role newRole, boolean newEnabled, String action) {
+        boolean wasEnabledAdmin = oldRole == Role.ADMIN && oldEnabled;
+        boolean willBeEnabledAdmin = newRole == Role.ADMIN && newEnabled;
+        if (wasEnabledAdmin && !willBeEnabledAdmin && countEnabledAdmins() <= 1) {
+            throw new BusinessException("系统必须保留至少一个启用状态的管理员账号，无法" + action
+                    + "该账号（请先新增或启用另一个管理员）");
+        }
+    }
+
     private long countEnabledAdmins() {
-        return userRepository.findAll().stream()
-                .filter(u -> u.getRole() == Role.ADMIN && Boolean.TRUE.equals(u.getEnabled()))
-                .count();
+        return userRepository.countByRoleAndEnabledTrue(Role.ADMIN);
     }
 
     private String normalize(String keyword) {

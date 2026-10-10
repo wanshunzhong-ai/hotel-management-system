@@ -96,7 +96,9 @@ public class BillController {
         try {
             Bill bill = billService.settle(id, form, loginUser == null ? "系统" : loginUser.getRealName());
             ra.addFlashAttribute("successMessage",
-                    "账单 " + bill.getBillNo() + " 结账完成，实收 ￥" + bill.getPaidAmount());
+                    "账单 " + bill.getBillNo() + " 结账完成：应收 ￥" + bill.getTotalAmount()
+                            + "，收款合计 ￥" + bill.getReceivedAmount()
+                            + (bill.getRefundAmount().signum() > 0 ? "，应退客人 ￥" + bill.getRefundAmount() : ""));
         } catch (BusinessException ex) {
             ra.addFlashAttribute("errorMessage", ex.getMessage());
         }

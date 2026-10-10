@@ -210,6 +210,10 @@
                                         <span class="text-muted-sm">客人仍欠</span>
                                         <span class="money" id="sOwe" style="color:#d63341">￥0.00</span>
                                     </div>
+                                    <div class="text-danger mt-2" id="sOweWarn" style="display:none;font-size:12px">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        <span id="sOweWarnText"></span>
+                                    </div>
                                 </div>
 
                                 <button type="submit" class="btn btn-primary w-100 mt-3">
@@ -224,8 +228,10 @@
                         <div class="card-body text-muted-sm" style="line-height:2">
                             <div class="d-flex justify-content-between"><span>押金</span>
                                 <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.deposit, 1, 'COMMA', 2, 'POINT')}">—</b></div>
-                            <div class="d-flex justify-content-between"><span>实收金额</span>
+                            <div class="d-flex justify-content-between"><span>退房时补付</span>
                                 <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.paidAmount, 1, 'COMMA', 2, 'POINT')}">—</b></div>
+                            <div class="d-flex justify-content-between"><span>收款合计</span>
+                                <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.receivedAmount, 1, 'COMMA', 2, 'POINT')}">—</b></div>
                             <div class="d-flex justify-content-between"><span>找零 / 应退</span>
                                 <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.refundAmount, 1, 'COMMA', 2, 'POINT')}">—</b></div>
                             <div class="d-flex justify-content-between"><span>支付方式</span>
@@ -243,6 +249,7 @@
                         <div class="card-body text-muted-sm" style="line-height:2">
                             <p class="mb-2">应收合计 = 房费 + 其他消费。</p>
                             <p class="mb-2">应退 = 押金 + 本次收款 − 应收合计，为正表示需退给客人。</p>
+                            <p class="mb-2">收款必须<b>足额</b>（押金 + 本次收款 ≥ 应收合计）才能结账；客人暂时付不清时请保留为「待结账」。</p>
                             <p class="mb-0">结账后账单将锁定，不能再增删消费项目。</p>
                         </div>
                     </div>
@@ -265,8 +272,36 @@
         document.getElementById('sPaid').textContent = window.formatMoney(deposit + paid);
         document.getElementById('sRefund').textContent = window.formatMoney(Math.max(diff, 0));
         document.getElementById('sOwe').textContent = window.formatMoney(Math.max(-diff, 0));
+
+        // 欠款时前端直接拦住提交，避免白跑一趟服务端校验
+        const warn = document.getElementById('sOweWarn');
+        const warnText = document.getElementById('sOweWarnText');
+        const owe = -diff;
+        if (owe > 0.005) {
+            warnText.textContent = '还差 ' + window.formatMoney(owe) + '，收齐后才能结账。';
+            warn.style.display = '';
+        } else {
+            warn.style.display = 'none';
+        }
     }
-    document.addEventListener('DOMContentLoaded', recalc);
+    document.addEventListener('DOMContentLoaded', function () {
+        recalc();
+        const form = document.querySelector('form[action$="/settle"]');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                const totalEl = document.getElementById('sTotal');
+                if (!totalEl) return;
+                const total = Number(totalEl.getAttribute('data-total') || 0);
+                const deposit = Number(document.getElementById('deposit').value || 0);
+                const paid = Number(document.getElementById('paidAmount').value || 0);
+                if (deposit + paid - total < -0.005) {
+                    e.preventDefault();
+                    const owe = total - deposit - paid;
+                    window.alert('还差 ' + window.formatMoney(owe) + '，收款足额后才能结账。');
+                }
+            });
+        }
+    });
 </script>
 </body>
 </html>

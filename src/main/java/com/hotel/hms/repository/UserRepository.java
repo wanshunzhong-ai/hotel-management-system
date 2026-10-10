@@ -1,5 +1,6 @@
 package com.hotel.hms.repository;
 
+import com.hotel.hms.entity.Role;
 import com.hotel.hms.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -19,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByOrderByIdAsc();
 
     long countByEnabledTrue();
+
+    /** 指定角色的启用账号数（用于「必须保留至少一个管理员」校验，走 SQL 计数而非全表加载） */
+    long countByRoleAndEnabledTrue(Role role);
 
     @Query("""
             select u from User u

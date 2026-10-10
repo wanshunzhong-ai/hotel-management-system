@@ -64,4 +64,12 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
             """)
     List<Room> findAvailableBetween(@Param("checkIn") LocalDate checkIn,
                                     @Param("checkOut") LocalDate checkOut);
+
+    /**
+     * 按房型统计房量，一次查询取代「逐个房型 count」的 N+1 调用。
+     *
+     * @return 每行为 {@code [roomTypeId, 房量]}
+     */
+    @Query("select r.roomType.id, count(r) from Room r group by r.roomType.id")
+    List<Object[]> countGroupByRoomType();
 }

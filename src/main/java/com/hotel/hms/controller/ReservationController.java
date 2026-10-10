@@ -1,6 +1,7 @@
 package com.hotel.hms.controller;
 
 import com.hotel.hms.common.BusinessException;
+import com.hotel.hms.config.BookingPolicy;
 import com.hotel.hms.config.LoginUser;
 import com.hotel.hms.dto.ReservationForm;
 import com.hotel.hms.entity.Reservation;
@@ -41,6 +42,7 @@ public class ReservationController {
     private final ReservationService reservationService;
     private final CustomerService customerService;
     private final RoomService roomService;
+    private final BookingPolicy bookingPolicy;
 
     @GetMapping
     public String list(@RequestParam(required = false) String keyword,
@@ -202,6 +204,10 @@ public class ReservationController {
     private void prepareForm(Model model) {
         model.addAttribute("customers", customerService.search(null));
         model.addAttribute("rooms", roomService.findAll());
+        // 预订规则由配置驱动，避免前端写死数字与服务端校验不一致
+        model.addAttribute("maxAdvanceDays", bookingPolicy.getMaxAdvanceDays());
+        model.addAttribute("maxStayNights", bookingPolicy.getMaxStayNights());
+        model.addAttribute("latestCheckIn", LocalDate.now().plusDays(bookingPolicy.getMaxAdvanceDays()));
     }
 
     private String operatorOf(LoginUser loginUser) {

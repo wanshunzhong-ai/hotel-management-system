@@ -48,8 +48,10 @@ spring:
 # 业务参数
 hotel:
   name: 云栖大酒店
-  # 预订最多可提前天数
+  # 最多可提前预订的天数（自今天起算，超出则拒绝下单）
   max-advance-days: 365
+  # 单次预订最多可住晚数
+  max-stay-nights: 30
   # 初始化演示数据
   init-demo-data: true
   startup:

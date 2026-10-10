@@ -44,13 +44,19 @@
 
                                     <div class="col-md-6">
                                         <label class="form-label required" for="checkInDate">入住日期</label>
-                                        <input type="date" class="form-control" id="checkInDate" th:field="*{checkInDate}">
+                                        <input type="date" class="form-control" id="checkInDate" th:field="*{checkInDate}"
+                                               th:attr="min=${today},max=${latestCheckIn}">
+                                        <div class="text-muted-sm mt-1" style="font-size:12px"
+                                             th:text="'最晚可订至 ' + ${#temporals.format(latestCheckIn,'yyyy-MM-dd')}">—</div>
                                         <div class="text-danger mt-1" style="font-size:12px"
                                              th:if="${#fields.hasErrors('checkInDate')}" th:errors="*{checkInDate}"></div>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label required" for="checkOutDate">离店日期</label>
-                                        <input type="date" class="form-control" id="checkOutDate" th:field="*{checkOutDate}">
+                                        <input type="date" class="form-control" id="checkOutDate" th:field="*{checkOutDate}"
+                                               th:attr="min=${today}">
+                                        <div class="text-muted-sm mt-1" style="font-size:12px"
+                                             th:text="'单次最多 ' + ${maxStayNights} + ' 晚'">—</div>
                                         <div class="text-danger mt-1" style="font-size:12px"
                                              th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></div>
                                     </div>
@@ -98,7 +104,8 @@
                     <div class="card mb-3">
                         <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>预订规则</h2></div>
                         <div class="card-body text-muted-sm" style="line-height:2">
-                            <p class="mb-2">离店日期必须晚于入住日期，最长可预订 <b>365 晚</b>。</p>
+                            <p class="mb-2">离店日期必须晚于入住日期，单次最多可住 <b th:text="${maxStayNights}">30</b> 晚。</p>
+                            <p class="mb-2">入住日期不能早于今天，最多可提前 <b th:text="${maxAdvanceDays}">365</b> 天预订。</p>
                             <p class="mb-2">系统按「<b>区间重叠</b>」判定占用，同一房间不会重复卖出。</p>
                             <p class="mb-2">下单时按房型当前门市价<b>锁定房价</b>，后续调价不影响该订单。</p>
                             <p class="mb-0">客人到店后，在订单上点击「入住」即可完成登记。</p>
@@ -146,6 +153,18 @@
             if (!checkIn.value || !checkOut.value) return 0;
             const a = new Date(checkIn.value), b = new Date(checkOut.value);
             return Math.round((b - a) / 86400000);
+        }
+
+        /** 离店日期下限跟随入住日期（至少次日），避免提交"同日入住离店" */
+        function syncCheckOutMin() {
+            if (!checkIn.value) return;
+            const next = new Date(checkIn.value);
+            next.setDate(next.getDate() + 1);
+            const iso = next.toISOString().slice(0, 10);
+            checkOut.min = iso;
+            if (checkOut.value && checkOut.value < iso) {
+                checkOut.value = iso;
+            }
         }
 
         function renderRooms(rooms) {
@@ -210,10 +229,14 @@
                 });
         }
 
-        checkIn.addEventListener('change', loadRooms);
+        checkIn.addEventListener('change', function () {
+            syncCheckOutMin();
+            loadRooms();
+        });
         checkOut.addEventListener('change', loadRooms);
         roomSelect.addEventListener('change', updateSummary);
         if (guestCount) guestCount.addEventListener('input', updateSummary);
+        syncCheckOutMin();
         loadRooms();
     })();
 </script>

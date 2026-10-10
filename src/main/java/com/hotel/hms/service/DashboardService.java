@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +59,12 @@ public class DashboardService {
         stats.setOccupiedRooms(occupied);
         stats.setCleaningRooms(cleaning);
         stats.setMaintenanceRooms(maintenance);
-        stats.setOccupancyRate(total == 0 ? 0d
-                : BigDecimal.valueOf(occupied * 100.0 / total).setScale(1, RoundingMode.HALF_UP).doubleValue());
+
+        // 出租率 = 在住房间 / 可售房间。可售房间需排除维修房，
+        // 否则长期维修的房间会永久稀释出租率。
+        long sellable = total - maintenance;
+        stats.setOccupancyRate(sellable <= 0 ? 0d
+                : BigDecimal.valueOf(occupied * 100.0 / sellable).setScale(1, RoundingMode.HALF_UP).doubleValue());
 
         stats.setArrivalsToday(reservationRepository.countArrivalsOn(today));
         stats.setDeparturesToday(reservationRepository.countDeparturesOn(today));
@@ -68,39 +73,34 @@ public class DashboardService {
         stats.setTotalCustomers(customerRepository.count());
         stats.setUnsettledBills(billRepository.countByStatus(BillStatus.UNPAID));
 
-        // 营收
-        List<com.hotel.hms.entity.Bill> settled = billRepository.findAll().stream()
-                .filter(b -> b.getStatus() == BillStatus.SETTLED && b.getSettledAt() != null)
-                .toList();
+        // 营收：全部用 SQL 聚合，避免把整张账单表拉进 JVM；
+        // 口径为「应收合计」totalAmount，押金抵扣部分不会被漏计。
+        LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
+        LocalDateTime monthStart = today.withDayOfMonth(1).atStartOfDay();
+        LocalDate trendStart = today.minusDays(6);
 
-        BigDecimal totalRevenue = sum(settled);
-        BigDecimal todayRevenue = sum(settled.stream()
-                .filter(b -> b.getSettledAt().toLocalDate().isEqual(today))
-                .toList());
-        BigDecimal monthRevenue = sum(settled.stream()
-                .filter(b -> b.getSettledAt().getYear() == today.getYear()
-                        && b.getSettledAt().getMonthValue() == today.getMonthValue())
-                .toList());
+        stats.setTotalRevenue(nvl(billRepository.sumSettledRevenue()));
+        stats.setTodayRevenue(nvl(billRepository.sumSettledRevenueBetween(todayStart, tomorrowStart)));
+        stats.setMonthRevenue(nvl(billRepository.sumSettledRevenueBetween(monthStart, tomorrowStart)));
 
-        stats.setTotalRevenue(totalRevenue);
-        stats.setTodayRevenue(todayRevenue);
-        stats.setMonthRevenue(monthRevenue);
-
-        // 在住订单的预计房费
+        // 在住订单的预计房费（整段住期，不是"今日一天"的营收）
         BigDecimal expected = reservationRepository.findInHouse().stream()
                 .map(Reservation::getRoomAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        stats.setTodayExpectedRevenue(expected);
+        stats.setInHouseExpectedRoomAmount(expected);
 
-        // 近 7 日营收趋势
+        // 近 7 日营收趋势：按结账日分组聚合，缺数据的天补 0
         Map<LocalDate, BigDecimal> daily = new LinkedHashMap<>();
         for (int i = 6; i >= 0; i--) {
             daily.put(today.minusDays(i), BigDecimal.ZERO);
         }
-        for (com.hotel.hms.entity.Bill bill : settled) {
-            LocalDate d = bill.getSettledAt().toLocalDate();
-            if (daily.containsKey(d)) {
-                daily.put(d, daily.get(d).add(bill.getPaidAmount()));
+        for (Object[] row : billRepository.sumSettledRevenueGroupByDay(trendStart.atStartOfDay(), tomorrowStart)) {
+            LocalDate date = LocalDate.of(((Number) row[0]).intValue(),
+                    ((Number) row[1]).intValue(),
+                    ((Number) row[2]).intValue());
+            if (daily.containsKey(date)) {
+                daily.put(date, nvl((BigDecimal) row[3]));
             }
         }
         List<String> labels = new ArrayList<>();
@@ -112,12 +112,16 @@ public class DashboardService {
         stats.setRevenueLabels(labels);
         stats.setRevenueValues(values);
 
-        // 房型房量分布
+        // 房型房量分布：一次 group by 取代逐个房型 count
+        Map<Long, Long> countByType = new HashMap<>();
+        for (Object[] row : roomRepository.countGroupByRoomType()) {
+            countByType.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
         List<String> typeLabels = new ArrayList<>();
         List<Long> typeValues = new ArrayList<>();
         for (RoomType type : roomTypeRepository.findAllByOrderByPriceAsc()) {
             typeLabels.add(type.getName());
-            typeValues.add(roomRepository.countByRoomTypeId(type.getId()));
+            typeValues.add(countByType.getOrDefault(type.getId(), 0L));
         }
         stats.setRoomTypeLabels(typeLabels);
         stats.setRoomTypeValues(typeValues);
@@ -135,10 +139,8 @@ public class DashboardService {
         return stats;
     }
 
-    private BigDecimal sum(List<com.hotel.hms.entity.Bill> bills) {
-        return bills.stream()
-                .map(b -> b.getPaidAmount() == null ? BigDecimal.ZERO : b.getPaidAmount())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    private BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /** 供控制器使用的时间边界 */

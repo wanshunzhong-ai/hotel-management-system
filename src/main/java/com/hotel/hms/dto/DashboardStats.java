@@ -23,7 +23,7 @@ public class DashboardStats {
     private long occupiedRooms;
     private long cleaningRooms;
     private long maintenanceRooms;
-    /** 入住率（%） */
+    /** 入住率（%）= 在住房间 / 可售房间（已排除维修房） */
     private double occupancyRate;
 
     // 今日业务
@@ -34,11 +34,16 @@ public class DashboardStats {
     private long totalCustomers;
     private long unsettledBills;
 
-    // 营收
+    // 营收（口径：已结账账单的「应收合计」，不含未结账账单）
     private BigDecimal todayRevenue = BigDecimal.ZERO;
     private BigDecimal monthRevenue = BigDecimal.ZERO;
     private BigDecimal totalRevenue = BigDecimal.ZERO;
-    private BigDecimal todayExpectedRevenue = BigDecimal.ZERO;
+
+    /**
+     * 在住订单的预计房费合计（整段住期，非「今日一天」的营收）。
+     * 用于衡量尚未结算的房费规模。
+     */
+    private BigDecimal inHouseExpectedRoomAmount = BigDecimal.ZERO;
 
     // 图表
     private List<String> revenueLabels = new ArrayList<>();
