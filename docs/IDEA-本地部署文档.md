@@ -9,10 +9,14 @@
 
 | 组件 | 版本要求 | 说明 |
 | --- | --- | --- |
-| JDK | **21**（必须） | `pom.xml` 中 `<java.version>21</java.version>`。Spring Boot 3.3 最低 17，但本项目按 21 编译 |
+| JDK | **21 及以上，至 27 均已验证** | `pom.xml` 中 `<java.version>21</java.version>`，编译产物固定为 Java 21 字节码（major 65） |
 | Maven | 3.8+（推荐 3.9.x） | 项目**未附带** `mvnw` 包装器，需本机安装 Maven 或使用 IDEA 内置 Maven |
 | MySQL | 8.0 / 9.x | 需要 MySQL 服务处于运行状态 |
 | IDEA | 2023.3+（推荐 2024.1+） | 社区版（Community）即可，无框架专属需求 |
+
+> **JDK 高版本注意**：本项目已把 Lombok 显式锁定为 `1.18.48`（见 `pom.xml` 的 `lombok.version`），
+> 因此在 JDK 21 / 27 下均可正常编译。**请勿删除该属性** —— Spring Boot 3.3.5 默认托管的 Lombok 1.18.34
+> 只支持到 JDK 22，在 JDK 23+ 上会直接编译失败（详见 7.11）。
 
 **快速自检**（命令行）：
 
@@ -284,6 +288,8 @@ SELECT user, host, plugin FROM mysql.user WHERE user = 'root';
 
 Lombok 未生效 → 回到 **3.4** 逐项检查（插件 + Enable annotation processing），然后 `Build → Rebuild Project`。
 
+> 若报的是一长串 `ExceptionInInitializerError` + `TypeTag :: UNKNOWN`，那**不是**配置问题，而是 JDK 版本不兼容，见 **7.11**。
+
 ### 7.5 `无效的目标发行版: 21` / `has been compiled by a more recent version`
 
 Maven 用的 JDK 不是 21。检查：
@@ -329,6 +335,54 @@ DROP DATABASE hotel_management;
 hotel:
   init-demo-data: false    # 只初始化三个账号，不灌房型/客房/订单
 ```
+
+### 7.11 ⭐ `java.lang.ExceptionInInitializerError` / `com.sun.tools.javac.code.TypeTag :: UNKNOWN`
+
+**完整报错**：
+
+```
+java: java.lang.ExceptionInInitializerError
+com.sun.tools.javac.code.TypeTag :: UNKNOWN
+```
+
+**根因**：Lombok 版本与编译所用 JDK 不兼容。Lombok 需要 hook javac 内部 API，
+JDK 大版本升级会改动这些内部结构，版本不匹配时 Lombok 初始化直接崩掉。
+
+具体到本项目：Spring Boot 3.3.5 默认托管的 Lombok 是 **1.18.34**，最高只支持到 **JDK 22**。
+若 IDEA 的 Project SDK 指向 **JDK 23 及以上**（例如本机装了 JDK 27），就会报出这个错。
+
+> 由于 IDEA 编译用的是「Project SDK」而不是命令行 `JAVA_HOME`，所以经常出现
+> **命令行 `mvn` 能跑通、IDEA 里却编译失败** 的现象 —— 两者用的不是同一个 JDK。
+
+**已验证的修复方案（推荐，改一处即可）**：
+
+`pom.xml` 的 `<properties>` 中显式锁定 Lombok 版本，覆盖 Spring Boot 的托管值：
+
+```xml
+<properties>
+    <java.version>21</java.version>
+    <lombok.version>1.18.48</lombok.version>   <!-- 支持 JDK 21 ~ 27 -->
+</properties>
+```
+
+改完在 IDEA 中：
+
+1. Maven 面板点 **Reload All Maven Projects**（🔄）
+2. `Build → Rebuild Project`
+3. 若仍报错，`File → Invalidate Caches → Invalidate and Restart`
+
+**备选方案**：把 IDEA 的 Project SDK 降到 21（见 3.2）。本项目声明的是 Java 21，
+用 21 编译最省事；但如果本机只装了高版本 JDK，用上面的 Lombok 升级方案即可，无需额外装 JDK。
+
+**验证是否修好**（命令行可独立复现，不依赖 IDEA）：
+
+```bash
+mvn clean package -DskipTests          # 期望 BUILD SUCCESS
+javap -verbose -cp target/classes com.hotel.hms.entity.Room | grep "major version"
+# 期望：major version: 65  ← 即 Java 21 字节码
+```
+
+> 实测结论：JDK 21 与 JDK 27 下 `mvn clean package` 均 BUILD SUCCESS，产物字节码均为 major 65。
 
 ---
 

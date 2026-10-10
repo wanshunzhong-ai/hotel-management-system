@@ -19,6 +19,13 @@
 
     <properties>
         <java.version>21</java.version>
+        <!--
+          Lombok 版本显式锁定，覆盖 Spring Boot 3.3.5 托管的 1.18.34。
+          原因：1.18.34 只支持到 JDK 22，在 JDK 23+ 上编译会抛
+          `java.lang.ExceptionInInitializerError: com.sun.tools.javac.code.TypeTag :: UNKNOWN`。
+          1.18.48 已实测可在 JDK 21 / JDK 27 下正常编译，故不要移除本属性。
+        -->
+        <lombok.version>1.18.48</lombok.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>

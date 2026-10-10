@@ -25,7 +25,7 @@
 
 ## 快速开始
 
-> 首次在 IntelliJ IDEA 中部署？请直接看 **[docs/IDEA-本地部署文档.md](docs/IDEA-本地部署文档.md)**（含 SDK 配置、Lombok、运行配置、10 类常见问题排查）。
+> 首次在 IntelliJ IDEA 中部署？请直接看 **[docs/IDEA-本地部署文档.md](docs/IDEA-本地部署文档.md)**（含 SDK 配置、Lombok、运行配置、11 类常见问题排查）。
 
 ```bash
 # 1. 准备 MySQL（root 密码按实际修改 application.yml）
