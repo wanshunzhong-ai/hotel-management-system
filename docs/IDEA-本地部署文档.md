@@ -199,16 +199,35 @@ java -jar target/hotel-management-system.jar --server.port=8080
 
 ## 五、启动与访问
 
-启动成功的标志（控制台最后几行）：
+启动成功后，控制台**最后**会打印一段启动横幅，直接给出入口链接：
+
+```
+  ✔ 云栖大酒店 · 酒店管理系统 启动成功
+════════════════════════════════════════════════════════════════
+  访问入口    http://localhost:8080/login
+  数据看板    http://localhost:8080/dashboard
+  局域网访问  http://192.168.1.5:8080/login
+────────────────────────────────────────────────────────────────
+  演示账号    admin / admin123              （管理员）
+              reception / 123456            （前台）
+              housekeeping / 123456         （客房）
+════════════════════════════════════════════════════════════════
+```
+
+在此之前还会看到这几行关键日志：
 
 ```
 已创建默认账号 admin / admin123
-已创建默认账号 reception / 123456
-已创建默认账号 housekeeping / 123456
 演示数据初始化完成。
 Tomcat started on port 8080 (http)
 Started HotelManagementApplication in x.xxx seconds
 ```
+
+> **横幅里的端口是真实端口**，取自实际启动的 Web 容器，而不是配置文件里的字面值。
+> 所以用 `--server.port=9090` 或环境变量 `SERVER_PORT` 覆盖端口后，打印出来的地址依然是对的。
+> 局域网地址取自本机非回环网卡（最多 3 个），手机/同事可以用它访问。
+>
+> 不想看到这段横幅？`application.yml` 里设 `hotel.startup.print-banner: false` 即可（业务日志不受影响）。
 
 浏览器访问：**http://localhost:8080**
 
@@ -426,6 +445,7 @@ Start-Process -NoNewWindow -RedirectStandardOutput app.log `
 | 模板缓存 | `application.yml` → `spring.thymeleaf.cache` | `false`（改页面免重启） |
 | 演示数据开关 | `application.yml` → `hotel.init-demo-data` | `true` |
 | 预订最大提前天数 | `application.yml` → `hotel.max-advance-days` | `365` |
+| 启动横幅开关 | `application.yml` → `hotel.startup.print-banner` | `true`（启动时打印入口链接） |
 | 启动类 | `src/main/java/com/hotel/hms/HotelManagementApplication.java` | — |
 | 打包产物 | `target/hotel-management-system.jar` | — |
 

@@ -52,6 +52,9 @@ hotel:
   max-advance-days: 365
   # 初始化演示数据
   init-demo-data: true
+  startup:
+    # 启动完成后在控制台打印访问入口链接（含局域网地址与演示账号）
+    print-banner: true
 
 logging:
   level:
