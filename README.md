@@ -25,6 +25,8 @@
 
 ## 快速开始
 
+> 首次在 IntelliJ IDEA 中部署？请直接看 **[docs/IDEA-本地部署文档.md](docs/IDEA-本地部署文档.md)**（含 SDK 配置、Lombok、运行配置、10 类常见问题排查）。
+
 ```bash
 # 1. 准备 MySQL（root 密码按实际修改 application.yml）
 #    默认连接：jdbc:mysql://127.0.0.1:3306/hotel_management（库不存在会自动创建）
@@ -87,3 +89,10 @@ bash scripts/func-test.sh    # 应用运行在 8080 时执行
 ## 页面截图
 
 见 `docs/screenshots/`（登录、看板、房态图、预订管理、预订表单、客房、房型、客户、账单列表/详情、账号权限、个人中心）。
+
+## 文档
+
+| 文档 | 说明 |
+| --- | --- |
+| [docs/IDEA-本地部署文档.md](docs/IDEA-本地部署文档.md) | IntelliJ IDEA 本地部署全流程：环境要求、数据库准备、项目导入、SDK/Lombok/编码配置、运行配置、验证清单、常见问题排查、打包部署、配置速查表 |
+
