@@ -58,6 +58,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         initUsers();
+        migrateLegacyRoomStatus();
         if (!initDemoData) {
             return;
         }
@@ -65,6 +66,23 @@ public class DataInitializer implements CommandLineRunner {
             initHotelData();
             log.info("演示数据初始化完成。");
         }
+    }
+
+    /**
+     * 房态语义收敛的一次性数据迁移（第三批 §1.1）。
+     *
+     * <p>旧实现把「未来有预订」也写进 {@code room.status}，导致房间当前明显空着
+     * 却显示「已预订」。收敛后该值不再由业务写入，这里把历史遗留值清回「空闲」，
+     * 可售性改由预约表按日期区间实时计算。
+     */
+    private void migrateLegacyRoomStatus() {
+        List<Room> legacy = roomRepository.findByStatusOrderByRoomNoAsc(RoomStatus.RESERVED);
+        if (legacy.isEmpty()) {
+            return;
+        }
+        legacy.forEach(room -> room.setStatus(RoomStatus.AVAILABLE));
+        roomRepository.saveAll(legacy);
+        log.info("房态语义收敛：{} 间历史「已预订」房已重置为「空闲」（可售性改由预约表按日期计算）", legacy.size());
     }
 
     // ------------------------------------------------------------------
@@ -152,16 +170,13 @@ public class DataInitializer implements CommandLineRunner {
         reservationRepository.save(inHouse3);
         markRoom(rooms.get(17), RoomStatus.OCCUPIED);
 
-        // 2) 今日预抵
+        // 2) 今日预抵（房间物理上是空的，只是今晚已被订走——房态图会按日期算出来）
         Reservation arrival1 = createReservation(rooms.get(25), customers.get(3), today, today.plusDays(1), 2, "前台-小林");
         reservationRepository.save(arrival1);
-        markRoom(rooms.get(25), RoomStatus.RESERVED);
 
-        // 3) 未来预订
+        // 3) 未来预订（不再把房间置为「已预订」占位，避免房态图把今天也显示成不可售）
         reservationRepository.save(createReservation(rooms.get(30), customers.get(4), today.plusDays(3), today.plusDays(5), 3, "前台-小林"));
-        markRoom(rooms.get(30), RoomStatus.RESERVED);
         reservationRepository.save(createReservation(rooms.get(33), customers.get(5), today.plusDays(7), today.plusDays(9), 2, "系统管理员"));
-        markRoom(rooms.get(33), RoomStatus.RESERVED);
 
         // 4) 历史已退房 + 已结账账单（供给近 7 日营收曲线）
         checkoutHistory(rooms.get(20), customers.get(6), 6, 4, BigDecimal.ZERO);
@@ -226,6 +241,7 @@ public class DataInitializer implements CommandLineRunner {
         reservation.setStatus(ReservationStatus.CHECKED_OUT);
         reservation.setCheckInTime(checkIn.atTime(15, 0));
         reservation.setCheckOutTime(checkOut.atTime(12, 0));
+        reservation.setActualCheckOutDate(checkOut);
         reservationRepository.save(reservation);
 
         Bill bill = new Bill();
@@ -236,6 +252,8 @@ public class DataInitializer implements CommandLineRunner {
         BigDecimal roomAmount = reservation.getRoomAmount();
         bill.setRoomAmount(roomAmount);
         bill.setOtherAmount(otherAmount);
+        bill.setDiscountAmount(BigDecimal.ZERO);
+        bill.setEarlyCheckoutDiscount(BigDecimal.ZERO);
         bill.setTotalAmount(roomAmount.add(otherAmount));
         bill.setDeposit(new BigDecimal("300.00"));
         bill.setPaidAmount(bill.getTotalAmount());

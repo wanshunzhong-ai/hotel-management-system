@@ -16,14 +16,21 @@ import java.util.List;
 @Setter
 public class DashboardStats {
 
-    // 房态总览
+    // 房态总览（物理状态，四项之和 = 总房量）
     private long totalRooms;
     private long availableRooms;
-    private long reservedRooms;
     private long occupiedRooms;
     private long cleaningRooms;
     private long maintenanceRooms;
-    /** 入住率（%）= 在住房间 / 可售房间（已排除维修房） */
+
+    // 今日销售口径（第三批 §1.1 收敛后与房态图同源）
+    /** 可售房量 = 总房量 − 维修房 */
+    private long sellableRooms;
+    /** 今日已售房量（今晚有有效订单的房间数，已入住与已预订都算） */
+    private long soldRoomsToday;
+    /** 今日剩余可售房量 = 可售房量 − 今日已售房量 */
+    private long availableToday;
+    /** 出租率（%）= 今日已售房 / 可售房 */
     private double occupancyRate;
 
     // 今日业务

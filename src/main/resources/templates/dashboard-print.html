@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('今日交接班名单')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('dashboard')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('今日交接班名单', '预抵 / 预离 / 在住一览，可直接打印')}"></header>
+        <main class="app-content">
+
+            <div class="card mb-3 no-print">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印名单
+                    </button>
+                    <a th:href="@{/dashboard}" class="btn btn-outline-secondary">返回看板</a>
+                    <span class="text-muted-sm ms-auto">打印时自动隐藏导航与按钮。</span>
+                </div>
+            </div>
+
+            <div class="card print-sheet" style="max-width:none">
+                <div class="card-body">
+                    <div class="print-head">
+                        <div>
+                            <div class="print-hotel" th:text="${hotelName}">云栖大酒店</div>
+                            <div class="text-muted-sm">今日交接班名单 / DAILY HANDOVER</div>
+                        </div>
+                        <div class="text-end text-muted-sm">
+                            <div th:text="${#temporals.format(date,'yyyy 年 MM 月 dd 日')}">—</div>
+                            <div th:text="'打印时间 ' + ${#temporals.format(#temporals.createNow(),'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- 今日预抵 -->
+                    <h3 class="sheet-title">
+                        <i class="bi bi-box-arrow-in-right me-2 text-primary"></i>
+                        今日预抵 <span class="badge-soft info" th:text="${#lists.size(arrivals)}">0</span>
+                    </h3>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th style="width:70px">房号</th>
+                                <th style="width:90px">客人</th>
+                                <th style="width:130px">手机号</th>
+                                <th style="width:70px">人数</th>
+                                <th style="width:130px">离店日期</th>
+                                <th>订单号</th>
+                                <th style="width:110px">状态</th>
+                                <th style="width:80px" class="no-print">到达</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${arrivals}">
+                                <td class="mono"><b th:text="${r.room.roomNo}">201</b></td>
+                                <td th:text="${r.customer.name}">张伟</td>
+                                <td class="mono" th:text="${r.customer.phone}">—</td>
+                                <td th:text="${r.guestCount}">1</td>
+                                <td th:text="${#temporals.format(r.checkOutDate,'yyyy-MM-dd')}">—</td>
+                                <td class="mono text-muted-sm" th:text="${r.orderNo}">—</td>
+                                <td><span class="badge-soft" th:classappend="${r.status.color}"
+                                          th:text="${r.status.label}">已预订</span></td>
+                                <td class="no-print">☐</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(arrivals)}">
+                                <td colspan="8" class="text-center text-muted-sm py-3">今日没有预抵订单</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="sheet-title mt-4">
+                        <i class="bi bi-box-arrow-right me-2 text-danger"></i>
+                        今日预离 <span class="badge-soft danger" th:text="${#lists.size(departures)}">0</span>
+                    </h3>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th style="width:70px">房号</th>
+                                <th style="width:90px">客人</th>
+                                <th style="width:130px">手机号</th>
+                                <th style="width:130px">入住日期</th>
+                                <th>订单号</th>
+                                <th style="width:80px" class="no-print">已退房</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${departures}">
+                                <td class="mono"><b th:text="${r.room.roomNo}">201</b></td>
+                                <td th:text="${r.customer.name}">张伟</td>
+                                <td class="mono" th:text="${r.customer.phone}">—</td>
+                                <td th:text="${#temporals.format(r.checkInDate,'yyyy-MM-dd')}">—</td>
+                                <td class="mono text-muted-sm" th:text="${r.orderNo}">—</td>
+                                <td class="no-print">☐</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(departures)}">
+                                <td colspan="6" class="text-center text-muted-sm py-3">今日没有预离订单</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="sheet-title mt-4">
+                        <i class="bi bi-person-fill me-2 text-warning"></i>
+                        在住一览 <span class="badge-soft warning" th:text="${#lists.size(inHouse)}">0</span>
+                    </h3>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th style="width:70px">房号</th>
+                                <th style="width:90px">客人</th>
+                                <th style="width:130px">手机号</th>
+                                <th style="width:130px">入住日期</th>
+                                <th style="width:130px">计划离店</th>
+                                <th>订单号</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${inHouse}">
+                                <td class="mono"><b th:text="${r.room.roomNo}">201</b></td>
+                                <td th:text="${r.customer.name}">张伟</td>
+                                <td class="mono" th:text="${r.customer.phone}">—</td>
+                                <td th:text="${#temporals.format(r.checkInDate,'yyyy-MM-dd')}">—</td>
+                                <td th:text="${#temporals.format(r.checkOutDate,'yyyy-MM-dd')}">—</td>
+                                <td class="mono text-muted-sm" th:text="${r.orderNo}">—</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(inHouse)}">
+                                <td colspan="6" class="text-center text-muted-sm py-3">当前没有在住客人</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="print-sign">
+                        <div>交班人：<span class="sign-line"></span></div>
+                        <div>接班人：<span class="sign-line"></span></div>
+                        <div>日期：<span class="sign-line"></span></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

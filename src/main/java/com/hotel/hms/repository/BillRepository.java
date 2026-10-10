@@ -2,6 +2,8 @@ package com.hotel.hms.repository;
 
 import com.hotel.hms.entity.Bill;
 import com.hotel.hms.entity.BillStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -65,14 +67,27 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     @Query("select distinct b from Bill b left join fetch b.items where b.id = :id")
     Optional<Bill> findDetailById(@Param("id") Long id);
 
+    /**
+     * 账单列表查询（分页 + 多条件筛选）。
+     *
+     * <p>排序由调用方通过白名单内的 {@link Pageable} 传入。
+     * 注意 {@code settledFrom/settledTo} 过滤的是<b>结账时间</b>，
+     * 未结账账单的 {@code settledAt} 为 null，会被区间条件排除——这符合「按结账日期对账」的语义。
+     */
     @Query("""
             select b from Bill b
             where (:keyword is null
                    or b.billNo like concat('%', :keyword, '%')
                    or b.customer.name like concat('%', :keyword, '%')
+                   or b.customer.phone like concat('%', :keyword, '%')
                    or b.room.roomNo like concat('%', :keyword, '%'))
               and (:status is null or b.status = :status)
-            order by b.id desc
+              and (:settledFrom is null or b.settledAt >= :settledFrom)
+              and (:settledTo is null or b.settledAt < :settledTo)
             """)
-    List<Bill> search(@Param("keyword") String keyword, @Param("status") BillStatus status);
+    Page<Bill> search(@Param("keyword") String keyword,
+                      @Param("status") BillStatus status,
+                      @Param("settledFrom") LocalDateTime settledFrom,
+                      @Param("settledTo") LocalDateTime settledTo,
+                      Pageable pageable);
 }

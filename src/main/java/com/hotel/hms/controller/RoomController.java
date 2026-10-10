@@ -1,6 +1,9 @@
 package com.hotel.hms.controller;
 
 import com.hotel.hms.common.BusinessException;
+import com.hotel.hms.config.LoginUser;
+import com.hotel.hms.dto.BoardState;
+import com.hotel.hms.dto.RoomBoardCell;
 import com.hotel.hms.entity.Room;
 import com.hotel.hms.entity.RoomStatus;
 import com.hotel.hms.service.ReservationService;
@@ -8,6 +11,8 @@ import com.hotel.hms.service.RoomService;
 import com.hotel.hms.service.RoomTypeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -18,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -45,7 +51,7 @@ public class RoomController {
         model.addAttribute("rooms", roomService.search(keyword, status, roomTypeId, floor));
         model.addAttribute("types", roomTypeService.findAll());
         model.addAttribute("floors", roomService.findAllFloors());
-        model.addAttribute("statuses", RoomStatus.values());
+        model.addAttribute("statuses", RoomStatus.physical());
         model.addAttribute("keyword", keyword);
         model.addAttribute("status", status);
         model.addAttribute("roomTypeId", roomTypeId);
@@ -54,19 +60,32 @@ public class RoomController {
         return "room/list";
     }
 
-    /** 房态图（按楼层平铺） */
+    /** 房态图（按楼层平铺，支持指定日期查看该晚的可售情况） */
     @GetMapping("/board")
-    public String board(Model model) {
-        List<Room> rooms = roomService.findAll();
-        Map<Integer, List<Room>> roomsByFloor = new LinkedHashMap<>();
-        rooms.stream()
-                .sorted(Comparator.comparing(Room::getFloor).thenComparing(Room::getRoomNo))
-                .forEach(r -> roomsByFloor.computeIfAbsent(r.getFloor(), k -> new ArrayList<>()).add(r));
+    public String board(@RequestParam(required = false)
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                        Model model) {
+        LocalDate day = date == null ? LocalDate.now() : date;
+        List<RoomBoardCell> cells = roomService.boardOn(day);
 
-        model.addAttribute("roomsByFloor", roomsByFloor);
-        model.addAttribute("rooms", rooms);
-        model.addAttribute("types", roomTypeService.findAll());
-        model.addAttribute("statuses", RoomStatus.values());
+        Map<Integer, List<RoomBoardCell>> cellsByFloor = new LinkedHashMap<>();
+        cells.stream()
+                .sorted(Comparator.comparing((RoomBoardCell c) -> c.room().getFloor())
+                        .thenComparing(c -> c.room().getRoomNo()))
+                .forEach(c -> cellsByFloor.computeIfAbsent(c.room().getFloor(), k -> new ArrayList<>()).add(c));
+
+        long sellable = cells.stream().filter(RoomBoardCell::sellable).count();
+        long sold = cells.size() - sellable;
+
+        model.addAttribute("cellsByFloor", cellsByFloor);
+        model.addAttribute("cells", cells);
+        model.addAttribute("boardDate", day);
+        model.addAttribute("isToday", day.equals(LocalDate.now()));
+        model.addAttribute("canGoBack", day.isAfter(LocalDate.now()));
+        model.addAttribute("sellableCount", sellable);
+        model.addAttribute("soldCount", sold);
+        model.addAttribute("boardStates", BoardState.displayOrder());
+        model.addAttribute("statuses", RoomStatus.physical());
         model.addAttribute("active", "room-board");
         return "room/board";
     }
@@ -77,7 +96,7 @@ public class RoomController {
         room.setStatus(RoomStatus.AVAILABLE);
         model.addAttribute("room", room);
         model.addAttribute("types", roomTypeService.findEnabled());
-        model.addAttribute("statuses", RoomStatus.values());
+        model.addAttribute("statuses", RoomStatus.physical());
         model.addAttribute("active", "rooms");
         return "room/form";
     }
@@ -86,7 +105,7 @@ public class RoomController {
     public String editForm(@PathVariable Long id, Model model) {
         model.addAttribute("room", roomService.getById(id));
         model.addAttribute("types", roomTypeService.findEnabled());
-        model.addAttribute("statuses", RoomStatus.values());
+        model.addAttribute("statuses", RoomStatus.physical());
         model.addAttribute("active", "rooms");
         return "room/form";
     }
@@ -95,7 +114,7 @@ public class RoomController {
     public String save(@Valid Room room, BindingResult binding, Model model, RedirectAttributes ra) {
         if (binding.hasErrors()) {
             model.addAttribute("types", roomTypeService.findEnabled());
-            model.addAttribute("statuses", RoomStatus.values());
+            model.addAttribute("statuses", RoomStatus.physical());
             model.addAttribute("active", "rooms");
             return "room/form";
         }
@@ -118,9 +137,10 @@ public class RoomController {
     public String changeStatus(@PathVariable Long id,
                                @RequestParam RoomStatus status,
                                @RequestParam(required = false) String redirectTo,
+                               @AuthenticationPrincipal LoginUser loginUser,
                                RedirectAttributes ra) {
         try {
-            roomService.changeStatus(id, status);
+            roomService.changeStatus(id, status, operatorOf(loginUser));
             ra.addFlashAttribute("successMessage", "房态已更新为「" + status.getLabel() + "」");
         } catch (BusinessException ex) {
             ra.addFlashAttribute("errorMessage", ex.getMessage());
@@ -131,9 +151,10 @@ public class RoomController {
     @PostMapping("/{id}/clean")
     public String markClean(@PathVariable Long id,
                             @RequestParam(required = false) String redirectTo,
+                            @AuthenticationPrincipal LoginUser loginUser,
                             RedirectAttributes ra) {
         try {
-            reservationService.markRoomClean(id);
+            reservationService.markRoomClean(id, operatorOf(loginUser));
             ra.addFlashAttribute("successMessage", "房间已完成清洁，恢复空闲");
         } catch (BusinessException ex) {
             ra.addFlashAttribute("errorMessage", ex.getMessage());
@@ -150,5 +171,9 @@ public class RoomController {
             ra.addFlashAttribute("errorMessage", ex.getMessage());
         }
         return "redirect:/rooms";
+    }
+
+    private String operatorOf(LoginUser loginUser) {
+        return loginUser == null ? null : loginUser.getRealName();
     }
 }

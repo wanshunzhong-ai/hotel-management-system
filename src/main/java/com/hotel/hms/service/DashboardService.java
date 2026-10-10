@@ -48,23 +48,26 @@ public class DashboardService {
 
         long total = roomRepository.count();
         long available = roomRepository.countByStatus(RoomStatus.AVAILABLE);
-        long reserved = roomRepository.countByStatus(RoomStatus.RESERVED);
         long occupied = roomRepository.countByStatus(RoomStatus.OCCUPIED);
         long cleaning = roomRepository.countByStatus(RoomStatus.CLEANING);
         long maintenance = roomRepository.countByStatus(RoomStatus.MAINTENANCE);
 
         stats.setTotalRooms(total);
         stats.setAvailableRooms(available);
-        stats.setReservedRooms(reserved);
         stats.setOccupiedRooms(occupied);
         stats.setCleaningRooms(cleaning);
         stats.setMaintenanceRooms(maintenance);
 
-        // 出租率 = 在住房间 / 可售房间。可售房间需排除维修房，
-        // 否则长期维修的房间会永久稀释出租率。
+        // 出租率口径（第三批 §1.1）：今日已售房 / 可售房。
+        // 旧口径只算「在住」，把今天有预订但还没到店的房漏掉了，行业上算错。
+        // 可售房需排除维修房，否则长期维修的房间会永久稀释出租率。
         long sellable = total - maintenance;
+        long soldToday = reservationRepository.countOccupiedRoomsOn(today);
+        stats.setSellableRooms(sellable);
+        stats.setSoldRoomsToday(soldToday);
+        stats.setAvailableToday(Math.max(sellable - soldToday, 0));
         stats.setOccupancyRate(sellable <= 0 ? 0d
-                : BigDecimal.valueOf(occupied * 100.0 / sellable).setScale(1, RoundingMode.HALF_UP).doubleValue());
+                : BigDecimal.valueOf(soldToday * 100.0 / sellable).setScale(1, RoundingMode.HALF_UP).doubleValue());
 
         stats.setArrivalsToday(reservationRepository.countArrivalsOn(today));
         stats.setDeparturesToday(reservationRepository.countDeparturesOn(today));

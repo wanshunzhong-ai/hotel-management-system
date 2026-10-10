@@ -6,21 +6,73 @@
 <div class="app-shell">
     <aside th:replace="~{fragments/layout :: sidebar('room-board')}"></aside>
     <div class="app-main">
-        <header th:replace="~{fragments/layout :: topbar('房态一览', '按楼层实时查看每一间房的状态')}"></header>
+        <header th:replace="~{fragments/layout :: topbar('房态一览', '选定日期后，每个房间显示这一天晚上的可售情况')}"></header>
         <main class="app-content">
             <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <!-- 日期选择器：房态图的核心（第三批 §1.1） -->
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <div class="filter-bar">
+                        <form th:action="@{/rooms/board}" method="get" class="d-flex align-items-end gap-2">
+                            <div>
+                                <label class="form-label" for="boardDate">查看日期</label>
+                                <input type="date" class="form-control" id="boardDate" name="date"
+                                       style="width:170px" th:value="${boardDate}"
+                                       onchange="this.form.submit()">
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-calendar-check me-1"></i>查看
+                            </button>
+                        </form>
+
+                        <div class="d-flex align-items-center gap-1">
+                            <a th:href="@{/rooms/board(date=${boardDate.minusDays(1)})}"
+                               class="btn btn-outline-secondary btn-sm" title="前一天">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                            <a th:href="@{/rooms/board(date=${today})}"
+                               class="btn btn-sm" th:classappend="${isToday} ? 'btn-primary' : 'btn-outline-secondary'">今天</a>
+                            <a th:href="@{/rooms/board(date=${today.plusDays(1)})}"
+                               class="btn btn-sm btn-outline-secondary">明天</a>
+                            <a th:href="@{/rooms/board(date=${today.plusDays(2)})}"
+                               class="btn btn-sm btn-outline-secondary">后天</a>
+                            <a th:href="@{/rooms/board(date=${boardDate.plusDays(1)})}"
+                               class="btn btn-outline-secondary btn-sm" title="后一天">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </div>
+
+                        <div class="ms-auto text-end">
+                            <div class="text-muted-sm">该晚营业情况</div>
+                            <div>
+                                <span class="badge-soft success me-1">可售 <b th:text="${sellableCount}">0</b></span>
+                                <span class="badge-soft danger me-1">已售 <b th:text="${soldCount}">0</b></span>
+                                <span class="badge-soft secondary">总计 <b th:text="${#lists.size(cells)}">0</b></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-muted-sm mt-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        「可售」= 该晚没有有效订单且房间未维修；离店当天<b>不算占用</b>，房间当晚可再次售出。
+                        房态图口径与预订时的「可订房」查询完全一致。
+                    </div>
+                </div>
+            </div>
 
             <!-- 图例与筛选 -->
             <div class="card mb-3">
                 <div class="card-body py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div class="legend">
-                        <span th:each="s : ${statuses}" role="button" class="status-filter" th:attr="data-status=${s.name()}">
+                        <span th:each="s : ${boardStates}" role="button" class="status-filter"
+                              th:attr="data-state=${s.name()}">
                             <i class="dot" th:classappend="' dot-' + ${s.color}"></i>
                             <span th:text="${s.label}">空闲</span>
                         </span>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="text-muted-sm">点击图例筛选房态，再次点击取消</span>
+                        <span class="text-muted-sm">点击图例筛选，再次点击取消</span>
                         <a th:href="@{/rooms}" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-list-ul me-1"></i>列表视图
                         </a>
@@ -29,7 +81,7 @@
             </div>
 
             <!-- 楼层房态图 -->
-            <div th:each="entry : ${roomsByFloor}" class="card mb-3 floor-block">
+            <div th:each="entry : ${cellsByFloor}" class="card mb-3 floor-block">
                 <div class="card-header">
                     <h2>
                         <i class="bi bi-building me-2 text-primary"></i>
@@ -37,41 +89,71 @@
                         <span class="text-muted-sm ms-2" th:text="'共 ' + ${#lists.size(entry.value)} + ' 间'">共 0 间</span>
                     </h2>
                     <div class="text-muted-sm">
-                        <span th:text="'空闲 ' + ${#lists.size(entry.value.?[status.name() == 'AVAILABLE'])} + ' · 在住 ' + ${#lists.size(entry.value.?[status.name() == 'OCCUPIED'])} + ' · 待清洁 ' + ${#lists.size(entry.value.?[status.name() == 'CLEANING'])}">—</span>
+                        <span th:text="'该晚可售 ' + ${#lists.size(entry.value.?[sellable])}
+                                        + ' · 已售 ' + ${#lists.size(entry.value.?[!sellable])}">—</span>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="room-board-grid">
-                        <div th:each="r : ${entry.value}" class="room-tile"
-                             th:classappend="'st-' + ${r.status.color}"
-                             th:attr="data-status=${r.status.name()}">
+                        <div th:each="c : ${entry.value}" class="room-tile"
+                             th:classappend="'st-' + ${c.state.color}"
+                             th:attr="data-state=${c.state.name()}">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="no" th:text="${r.roomNo}">201</div>
-                                    <div class="type" th:text="${r.roomType.name}">标准大床房</div>
+                                    <div class="no" th:text="${c.room.roomNo}">201</div>
+                                    <div class="type" th:text="${c.room.roomType.name}">标准大床房</div>
                                 </div>
-                                <i th:class="'bi ' + ${r.status.icon} + ' text-muted'"></i>
-                            </div>
-                            <div class="foot">
-                                <span class="price"
-                                      th:text="'￥' + ${#numbers.formatDecimal(r.roomType.price, 1, 'COMMA', 0, 'POINT')}">￥268</span>
-                                <span class="badge-soft" th:classappend="${r.status.color}"
-                                      th:text="${r.status.label}">空闲</span>
+                                <i th:class="'bi ' + ${c.state.icon} + ' text-muted'"></i>
                             </div>
 
-                            <div class="mt-2 d-flex gap-1" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
-                                <form th:if="${r.status.name() == 'CLEANING'}"
-                                      th:action="@{/rooms/{id}/clean(id=${r.id})}" method="post" class="flex-grow-1">
-                                    <input type="hidden" name="redirectTo" value="/rooms/board">
+                            <div class="occupancy" th:if="${c.occupancy != null}">
+                                <i class="bi bi-person-circle me-1"></i>
+                                <span th:text="${c.occupancy.customer.name}">张伟</span>
+                                <div class="text-muted-sm mono" th:text="${c.occupancy.orderNo}">—</div>
+                                <div class="text-muted-sm"
+                                     th:text="${#temporals.format(c.occupancy.checkInDate,'MM-dd')} + ' → ' + ${#temporals.format(c.occupancy.checkOutDate,'MM-dd')}">—</div>
+                            </div>
+                            <div class="occupancy text-muted-sm" th:if="${c.occupancy == null}">
+                                <span th:text="'￥' + ${#numbers.formatDecimal(c.room.roomType.price, 1, 'COMMA', 0, 'POINT')}">￥268</span>
+                            </div>
+
+                            <div class="foot">
+                                <span class="badge-soft" th:classappend="${c.state.color}"
+                                      th:text="${c.state.label}">空闲</span>
+                                <span class="text-muted-sm" th:if="${!c.sellable}">不可售</span>
+                                <span class="text-muted-sm" th:if="${c.sellable}" style="color:#0f9d58">可售</span>
+                            </div>
+
+                            <div class="mt-2 d-flex gap-1 flex-wrap" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+                                <form th:if="${c.state.name() == 'CLEANING'}"
+                                      th:action="@{/rooms/{id}/clean(id=${c.room.id})}" method="post" class="flex-grow-1">
+                                    <input type="hidden" name="redirectTo"
+                                           th:value="'/rooms/board?date=' + ${boardDate}">
                                     <button type="submit" class="btn btn-sm btn-accent w-100">
                                         <i class="bi bi-stars me-1"></i>清洁完成
                                     </button>
                                 </form>
-                                <form th:unless="${r.status.name() == 'CLEANING'}"
-                                      th:action="@{/rooms/{id}/status(id=${r.id})}" method="post" class="flex-grow-1">
-                                    <input type="hidden" name="redirectTo" value="/rooms/board">
-                                    <select class="form-select form-select-sm" name="status" onchange="this.form.submit()"
-                                            style="font-size:12px;padding:2px 6px">
+
+                                <a th:if="${c.sellable}"
+                                   th:href="@{/reservations/new(roomId=${c.room.id}, checkIn=${boardDate})}"
+                                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')"
+                                   class="btn btn-sm btn-outline-secondary flex-grow-1 text-nowrap">
+                                    <i class="bi bi-plus-lg me-1"></i>订这间
+                                </a>
+                                <a th:if="${!c.sellable && c.occupancy != null}"
+                                   th:href="@{/reservations/{id}(id=${c.occupancy.id})}"
+                                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')"
+                                   class="btn btn-sm btn-outline-secondary flex-grow-1 text-nowrap">
+                                    <i class="bi bi-journal-text me-1"></i>看订单
+                                </a>
+
+                                <form th:unless="${c.state.name() == 'CLEANING'}"
+                                      th:action="@{/rooms/{id}/status(id=${c.room.id})}" method="post"
+                                      class="flex-grow-1">
+                                    <input type="hidden" name="redirectTo"
+                                           th:value="'/rooms/board?date=' + ${boardDate}">
+                                    <select class="form-select form-select-sm room-status-select" name="status"
+                                            onchange="this.form.submit()">
                                         <option value="" selected disabled>改房态</option>
                                         <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"></option>
                                     </select>
@@ -82,7 +164,7 @@
                 </div>
             </div>
 
-            <div th:if="${#maps.isEmpty(roomsByFloor)}" class="card">
+            <div th:if="${#maps.isEmpty(cellsByFloor)}" class="card">
                 <div class="card-body">
                     <div class="empty-state"><i class="bi bi-building"></i>还没有客房数据</div>
                 </div>
@@ -95,16 +177,18 @@
 
 <script>
     (function () {
-        let activeStatus = null;
+        let activeState = null;
         const filters = document.querySelectorAll('.status-filter');
         const tiles = document.querySelectorAll('.room-tile');
-        filters.forEach((f) => {
-            f.addEventListener('click', () => {
-                const s = f.getAttribute('data-status');
-                activeStatus = (activeStatus === s) ? null : s;
-                filters.forEach((x) => x.style.opacity = (activeStatus && x.getAttribute('data-status') !== activeStatus) ? '.4' : '1');
-                tiles.forEach((t) => {
-                    t.style.display = (!activeStatus || t.getAttribute('data-status') === activeStatus) ? '' : 'none';
+        filters.forEach(function (f) {
+            f.addEventListener('click', function () {
+                const s = f.getAttribute('data-state');
+                activeState = (activeState === s) ? null : s;
+                filters.forEach(function (x) {
+                    x.style.opacity = (activeState && x.getAttribute('data-state') !== activeState) ? '.4' : '1';
+                });
+                tiles.forEach(function (t) {
+                    t.style.display = (!activeState || t.getAttribute('data-state') === activeState) ? '' : 'none';
                 });
             });
         });

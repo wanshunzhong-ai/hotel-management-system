@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  通用分页条。
+  pageBase / sizeBase 由服务端 Pagination.bases() 生成，已带 URL 编码且以 ? 或 & 结尾，
+  模板只需追加 page=N / size=N，翻页时筛选条件与排序自动保留。
+-->
+<div th:fragment="pager(page, pageNumbers, pageBase, sizeBase, sizes)" class="pager-bar"
+     th:if="${page.totalElements > 0}">
+    <div class="pager-info">
+        <i class="bi bi-list-ul me-1"></i>
+        共 <b th:text="${page.totalElements}">0</b> 条
+        <span th:if="${page.totalPages > 1}">
+            · 第 <b th:text="${page.number + 1}">1</b> / <span th:text="${page.totalPages}">1</span> 页
+        </span>
+    </div>
+
+    <nav class="pager-nav" th:if="${page.totalPages > 1}" aria-label="分页导航">
+        <a class="pager-btn" th:classappend="${page.first} ? 'is-disabled'"
+           th:href="@{${pageBase} + 'page=0'}" title="首页" aria-label="首页">
+            <i class="bi bi-chevron-double-left"></i>
+        </a>
+        <a class="pager-btn" th:classappend="${page.first} ? 'is-disabled'"
+           th:href="@{${pageBase} + 'page=' + ${page.first ? 0 : page.number - 1}}"
+           title="上一页" aria-label="上一页">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+
+        <a th:each="n : ${pageNumbers}" class="pager-btn"
+           th:classappend="${n == page.number} ? 'is-active'"
+           th:href="@{${pageBase} + 'page=' + ${n}}" th:text="${n + 1}">1</a>
+
+        <a class="pager-btn" th:classappend="${page.last} ? 'is-disabled'"
+           th:href="@{${pageBase} + 'page=' + ${page.last ? page.number : page.number + 1}}"
+           title="下一页" aria-label="下一页">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+        <a class="pager-btn" th:classappend="${page.last} ? 'is-disabled'"
+           th:href="@{${pageBase} + 'page=' + ${page.totalPages - 1}}" title="末页" aria-label="末页">
+            <i class="bi bi-chevron-double-right"></i>
+        </a>
+    </nav>
+
+    <div class="pager-size">
+        <span class="text-muted-sm me-1">每页</span>
+        <a th:each="s : ${sizes}" class="pager-btn pager-btn-sm"
+           th:classappend="${s == page.size} ? 'is-active'"
+           th:href="@{${sizeBase} + 'size=' + ${s}}" th:text="${s}">20</a>
+        <span class="text-muted-sm ms-1">条</span>
+    </div>
+</div>
+</body>
+</html>

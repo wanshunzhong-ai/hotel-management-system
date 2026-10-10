@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('操作日志')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('logs')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('操作日志', '谁在何时改了什么——结账、反结账、折扣、房态变更均可追溯')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/logs}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="细节 / 操作人 / 动作" style="width:220px">
+                        </div>
+                        <div>
+                            <label class="form-label">动作</label>
+                            <select class="form-select" name="action" style="width:150px">
+                                <option value="">全部动作</option>
+                                <option th:each="a : ${actions}" th:value="${a}" th:text="${a}"
+                                        th:selected="${action == a}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">日期区间</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="date" class="form-control" name="from" style="width:150px"
+                                       th:value="${from}">
+                                <span class="text-muted-sm">~</span>
+                                <input type="date" class="form-control" name="to" style="width:150px"
+                                       th:value="${to}">
+                            </div>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/logs}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-clock-history me-2 text-primary"></i>操作流水
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${page.totalElements} + ' 条'">共 0 条</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:150px">时间</th>
+                            <th style="width:110px">动作</th>
+                            <th style="width:100px">操作人</th>
+                            <th>细节</th>
+                            <th style="width:140px">对象</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="l : ${page.content}">
+                            <td class="text-muted-sm mono"
+                                th:text="${l.createdAt == null ? '—' : #temporals.format(l.createdAt,'yyyy-MM-dd HH:mm:ss')}">—</td>
+                            <td>
+                                <span class="badge-soft primary" th:text="${l.action}">结账</span>
+                            </td>
+                            <td th:text="${l.operator} ?: '—'">前台-小林</td>
+                            <td th:text="${l.detail} ?: '—'">—</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${l.targetType == null ? '—' : l.targetType + ' #' + l.targetId}">—</td>
+                        </tr>
+                        <tr th:if="${page.totalElements == 0}">
+                            <td colspan="5">
+                                <div class="empty-state">
+                                    <i class="bi bi-clock-history"></i>还没有操作记录
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

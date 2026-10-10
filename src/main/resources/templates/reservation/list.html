@@ -16,18 +16,50 @@
                         <div>
                             <label class="form-label">关键词</label>
                             <input type="text" class="form-control" name="keyword" th:value="${keyword}"
-                                   placeholder="订单号 / 客户姓名 / 手机号 / 房号" style="width:250px">
+                                   placeholder="订单号 / 姓名 / 手机号 / 房号" style="width:230px">
                         </div>
                         <div>
                             <label class="form-label">订单状态</label>
-                            <select class="form-select" name="status" style="width:150px">
+                            <select class="form-select" name="status" style="width:140px">
                                 <option value="">全部状态</option>
                                 <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
                                         th:selected="${status != null && status == s}"></option>
                             </select>
                         </div>
+                        <div>
+                            <label class="form-label">入住日期</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="date" class="form-control" name="checkInFrom" style="width:150px"
+                                       th:value="${checkInFrom}">
+                                <span class="text-muted-sm">~</span>
+                                <input type="date" class="form-control" name="checkInTo" style="width:150px"
+                                       th:value="${checkInTo}">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">楼层</label>
+                            <select class="form-select" name="floor" style="width:110px">
+                                <option value="">全部</option>
+                                <option th:each="f : ${floors}" th:value="${f}" th:text="${f} + ' 层'"
+                                        th:selected="${floor != null && floor == f}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">排序</label>
+                            <select class="form-select" name="sort" style="width:160px">
+                                <option th:each="e : ${sortLabels}" th:value="${e.key}" th:text="${e.value}"
+                                        th:selected="${sort == e.key}"></option>
+                            </select>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
                         <a th:href="@{/reservations}" class="btn btn-outline-secondary">重置</a>
+                        <a th:href="@{/reservations/export(keyword=${keyword}, status=${status},
+                                                          checkInFrom=${checkInFrom}, checkInTo=${checkInTo},
+                                                          floor=${floor}, sort=${sort})}"
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-download me-1"></i>导出 CSV
+                        </a>
                         <a th:href="@{/reservations/new}" class="btn btn-accent ms-auto">
                             <i class="bi bi-calendar-plus me-1"></i>新建预订
                         </a>
@@ -39,11 +71,10 @@
                 <div class="card-header">
                     <h2>
                         <i class="bi bi-journal-text me-2 text-primary"></i>预订单
-                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(reservations)} + ' 单'">共 0 单</span>
                     </h2>
                 </div>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table table-sticky-first">
                         <thead>
                         <tr>
                             <th style="width:140px">订单号</th>
@@ -57,7 +88,7 @@
                         </tr>
                         </thead>
                         <tbody>
-                        <tr th:each="r : ${reservations}">
+                        <tr th:each="r : ${page.content}">
                             <td>
                                 <a th:href="@{/reservations/{id}(id=${r.id})}" class="mono"
                                    th:text="${r.orderNo}">RS202610100001</a>
@@ -106,7 +137,7 @@
                                    class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
                             </td>
                         </tr>
-                        <tr th:if="${#lists.isEmpty(reservations)}">
+                        <tr th:if="${page.totalElements == 0}">
                             <td colspan="8">
                                 <div class="empty-state"><i class="bi bi-journal-text"></i>没有符合条件的订单</div>
                             </td>
@@ -114,6 +145,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
             </div>
         </main>
         <footer th:replace="~{fragments/layout :: footer}"></footer>

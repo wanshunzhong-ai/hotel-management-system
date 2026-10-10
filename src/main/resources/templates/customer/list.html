@@ -18,9 +18,14 @@
                             <input type="text" class="form-control" name="keyword" th:value="${keyword}"
                                    placeholder="姓名 / 手机号 / 证件号" style="width:240px">
                         </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
                         <a th:href="@{/customers}" class="btn btn-outline-secondary">重置</a>
-                        <span class="text-muted-sm ms-auto">累计建档 <b th:text="${total}">0</b> 位客户</span>
+                        <span class="text-muted-sm ms-auto">
+                            <span th:if="${keyword != null && !keyword.isBlank()}">筛选命中 </span>
+                            <span th:unless="${keyword != null && !keyword.isBlank()}">累计建档 </span>
+                            <b th:text="${total}">0</b> 位客户
+                        </span>
                     </form>
                 </div>
             </div>
@@ -29,7 +34,6 @@
                 <div class="card-header">
                     <h2>
                         <i class="bi bi-people me-2 text-primary"></i>客户列表
-                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(customers)} + ' 条'">共 0 条</span>
                     </h2>
                     <a th:href="@{/customers/new}" class="btn btn-sm btn-primary">
                         <i class="bi bi-person-plus me-1"></i>新增客户
@@ -50,7 +54,7 @@
                         </tr>
                         </thead>
                         <tbody>
-                        <tr th:each="c : ${customers}">
+                        <tr th:each="c : ${page.content}">
                             <td class="text-muted" th:text="${c.id}">1</td>
                             <td>
                                 <strong th:text="${c.name}">张伟</strong>
@@ -80,7 +84,7 @@
                                 </form>
                             </td>
                         </tr>
-                        <tr th:if="${#lists.isEmpty(customers)}">
+                        <tr th:if="${page.totalElements == 0}">
                             <td colspan="8">
                                 <div class="empty-state"><i class="bi bi-people"></i>没有找到客户档案</div>
                             </td>
@@ -88,6 +92,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
             </div>
         </main>
         <footer th:replace="~{fragments/layout :: footer}"></footer>

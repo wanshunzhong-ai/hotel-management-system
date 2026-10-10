@@ -40,6 +40,8 @@ public class SecurityConfig {
                                 "/images/**", "/favicon.ico", "/error/**").permitAll()
                         // 账号管理仅管理员
                         .requestMatchers("/users/**").hasRole("ADMIN")
+                        // 操作日志（审计）仅管理员
+                        .requestMatchers("/logs", "/logs/**").hasRole("ADMIN")
                         // 客房的新增 / 编辑 / 删除仅管理员与前台
                         .requestMatchers("/rooms/new", "/rooms/*/edit", "/rooms/*/delete")
                         .hasAnyRole("ADMIN", "RECEPTION")

@@ -2,7 +2,9 @@ package com.hotel.hms.repository;
 
 import com.hotel.hms.entity.Room;
 import com.hotel.hms.entity.RoomStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,19 @@ import java.util.Optional;
 public interface RoomRepository extends JpaRepository<Room, Long> {
 
     Optional<Room> findByRoomNo(String roomNo);
+
+    /**
+     * 加行级排他锁读取房间（第三批 §1.4 并发保护）。
+     *
+     * <p>下单 / 改单 / 办理入住前先锁住目标房间，把「先查冲突、再写入」的
+     * check-then-act 串行化。没有这个锁，两个前台同时给同一房间下同区间订单时，
+     * 双方都读不到对方尚未提交的行，冲突校验都会通过，最终两单都落库 → 到店无房。
+     *
+     * <p><b>必须在事务内调用</b>，锁会在事务提交时释放。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Room r where r.id = :id")
+    Optional<Room> findWithLockById(@Param("id") Long id);
 
     boolean existsByRoomNo(String roomNo);
 

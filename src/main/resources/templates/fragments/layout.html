@@ -55,6 +55,10 @@
         </a>
 
         <div class="nav-section">系统</div>
+        <a th:href="@{/logs}" class="nav-link-item" th:classappend="${active == 'logs'} ? 'active'"
+           sec:authorize="hasRole('ADMIN')">
+            <i class="bi bi-clock-history"></i><span>操作日志</span>
+        </a>
         <a th:href="@{/users}" class="nav-link-item" th:classappend="${active == 'users'} ? 'active'"
            sec:authorize="hasRole('ADMIN')">
             <i class="bi bi-shield-lock"></i><span>账号权限</span>

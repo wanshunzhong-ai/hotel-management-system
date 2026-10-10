@@ -25,7 +25,8 @@
                     <div>
                         <div class="stat-value" th:text="${stats.availableRooms}">0</div>
                         <div class="stat-label">当前空闲</div>
-                        <div class="stat-hint" th:text="'待清洁 ' + ${stats.cleaningRooms} + ' · 维修 ' + ${stats.maintenanceRooms}">—</div>
+                        <div class="stat-hint"
+                             th:text="'今晚尚可售 ' + ${stats.availableToday} + ' 间 · 待清洁 ' + ${stats.cleaningRooms}">—</div>
                     </div>
                 </div>
                 <div class="stat-card">
@@ -34,7 +35,7 @@
                         <div class="stat-value" th:text="${stats.occupancyRate} + '%'">0%</div>
                         <div class="stat-label">出租率</div>
                         <div class="stat-hint"
-                             th:text="'可售 ' + (${stats.totalRooms} - ${stats.maintenanceRooms}) + ' 间 · 已预订 ' + ${stats.reservedRooms} + ' 间'">—</div>
+                             th:text="'可售 ' + ${stats.sellableRooms} + ' 间 · 已售 ' + ${stats.soldRoomsToday} + ' 间'">—</div>
                     </div>
                 </div>
                 <div class="stat-card">
@@ -109,6 +110,14 @@
             </div>
 
             <!-- 今日待办 -->
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h2 class="mb-0" style="font-size:15px">
+                    <i class="bi bi-list-check me-2 text-primary"></i>今日待办
+                </h2>
+                <a th:href="@{/dashboard/print/today}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-printer me-1"></i>打印交接班名单
+                </a>
+            </div>
             <div class="row g-3">
                 <div class="col-lg-6">
                     <div class="card h-100">
@@ -196,8 +205,6 @@
                         <div class="progress-bar bg-danger" role="progressbar"
                              th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.occupiedRooms * 100 / stats.totalRooms} + '%'"></div>
                         <div class="progress-bar" role="progressbar"
-                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.reservedRooms * 100 / stats.totalRooms} + '%;background:#0d7fbf'"></div>
-                        <div class="progress-bar" role="progressbar"
                              th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.cleaningRooms * 100 / stats.totalRooms} + '%;background:#d99e08'"></div>
                         <div class="progress-bar" role="progressbar"
                              th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.maintenanceRooms * 100 / stats.totalRooms} + '%;background:#8394ab'"></div>
@@ -206,10 +213,13 @@
                     </div>
                     <div class="legend mt-3">
                         <span><i class="dot" style="background:#dc3545"></i>已入住 <b th:text="${stats.occupiedRooms}">0</b></span>
-                        <span><i class="dot" style="background:#0d7fbf"></i>已预订 <b th:text="${stats.reservedRooms}">0</b></span>
                         <span><i class="dot" style="background:#d99e08"></i>待清洁 <b th:text="${stats.cleaningRooms}">0</b></span>
                         <span><i class="dot" style="background:#8394ab"></i>维修中 <b th:text="${stats.maintenanceRooms}">0</b></span>
                         <span><i class="dot" style="background:#0f9d58"></i>空闲 <b th:text="${stats.availableRooms}">0</b></span>
+                        <span><i class="dot" style="background:#0d7fbf"></i>今晚已售（含已预订）<b th:text="${stats.soldRoomsToday}">0</b></span>
+                    </div>
+                    <div class="text-muted-sm mt-2">
+                        物理房态之和 = 总房量；「今晚已售」按预约表实时计算，与上方进度条口径不同，故单列。
                     </div>
                 </div>
             </div>

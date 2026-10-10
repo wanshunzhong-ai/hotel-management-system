@@ -21,6 +21,10 @@ chk() { if [ "$2" = "$3" ]; then ok "$1 ($2)"; else no "$1 期望[$3] 实际[$2]
 has() { if printf '%s' "$2" | grep -q -- "$3"; then ok "$1"; else no "$1（未匹配 [$3]）"; fi; }
 # 取金额的整数部分（去千分位），用于数值比较
 yuan(){ printf '%s' "$1" | tr -d ',' | grep -o '[0-9]*' | head -1; }
+# 状态徽章计数。不能直接 grep -c '已结账'：页面上别处也会出现这个词
+# （如「已结账，明细锁定（如需更正请联系管理员反结账）」），会把计数抬高。
+# 只匹配 <span class="badge-soft ...">已结账</span> 这种真正的状态徽章。
+badge_count() { grep -o "badge-soft[^>]*>$2" "$1" | wc -l | tr -d ' '; }
 
 csrf_of() { curl -s -b "$2" -c "$2" "$1" -o "$3"; grep -o 'name="_csrf"[^>]*value="[^"]*"' "$3" | head -1 | sed 's/.*value="//;s/"//'; }
 csrf_in() { grep -o 'name="_csrf"[^>]*value="[^"]*"' "$1" | head -1 | sed 's/.*value="//;s/"//'; }
@@ -42,8 +46,21 @@ post_form() { # $1=url $2=cookiejar $3=csrf 剩余=表单
     --data-urlencode "_csrf=$t" "$@" "$url"
 }
 
-count_orders() { curl -s -b "$1" "$BASE/reservations" | grep -o '/reservations/[0-9]*"' | sort -u | wc -l | tr -d ' '; }
-newest_order() { curl -s -b "$1" "$BASE/reservations" | grep -o '/reservations/[0-9]*"' | head -1 | grep -o '[0-9]*'; }
+count_orders() { curl -s -b "$1" "$BASE/reservations?size=100" | grep -o '/reservations/[0-9]*"' | sort -u | wc -l | tr -d ' '; }
+
+# 选一间「日期可订 ∩ 房态空闲」的房间：只按日期筛会把「已入住但今天离店」的房间
+# 也当成可订，导致入住失败（房态语义问题，见 docs/优化建议.md 1.1）。
+pick_free_room() { # $1=checkIn $2=checkOut
+  local ids free id
+  ids=$(curl -s -b "$CJ" "$BASE/reservations/available-rooms?checkIn=$1&checkOut=$2" \
+        | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+  free=$(curl -s -b "$CJ" "$BASE/rooms?status=AVAILABLE" \
+        | grep -o '/rooms/[0-9]*/edit' | grep -o '[0-9]*')
+  for id in $ids; do
+    if printf '%s\n' "$free" | grep -qx "$id"; then printf '%s' "$id"; return 0; fi
+  done
+}
+newest_order() { curl -s -b "$1" "$BASE/reservations?size=100" | grep -o '/reservations/[0-9]*"' | head -1 | grep -o '[0-9]*'; }
 dash_total()   { curl -s -b "$1" "$BASE/dashboard" | grep -o '累计营收 ￥[0-9,]*' | head -1; }
 bill_id_of()   { curl -s -b "$1" "$BASE/bills" | grep -o "/bills/$2\"" | head -1; }
 
@@ -77,8 +94,9 @@ FAR=$(date -d "+400 day" +%Y-%m-%d)
 FAR2=$(date -d "+401 day" +%Y-%m-%d)
 LONG=$(date -d "+40 day" +%Y-%m-%d)
 CID=$(curl -s -b "$CJ" "$BASE/customers" | grep -o '/customers/[0-9]*/edit' | head -1 | grep -o '[0-9]*')
-RID=$(curl -s -b "$CJ" "$BASE/reservations/available-rooms?checkIn=$TODAY&checkOut=$TOMORROW" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
+RID=$(pick_free_room "$TODAY" "$TOMORROW")
 echo "   客户ID=$CID 房间ID=$RID 今天=$TODAY"
+if [ -z "$RID" ]; then no "找不到「日期可订且房态空闲」的房间，无法继续"; exit 1; fi
 
 echo
 echo "=============================================="
@@ -138,14 +156,14 @@ POST_BODY=$(cat "$TMP/post.html")
 has "欠款结账被拒（提示收款不足）" "$POST_BODY" '收款不足'
 has "提示含「还差」金额" "$POST_BODY" '还差'
 curl -s -b "$CJ" "$BASE/bills/$BILLID" -o "$TMP/bd_fail.html"
-chk "账单未被标记为已结账" "$(grep -c '已结账' "$TMP/bd_fail.html")" "0"
+chk "账单未被标记为已结账" "$(badge_count "$TMP/bd_fail.html" '已结账')" "0"
 
 T=$(csrf_in "$TMP/bd_fail.html")
 post_form "$BASE/bills/$BILLID/settle" "$CJ" "$T" \
   --data-urlencode "deposit=0.00" --data-urlencode "paidAmount=$TOTAL" \
   --data-urlencode "payMethod=ALIPAY" --data-urlencode "remark=足额结账" > /dev/null
 curl -s -b "$CJ" "$BASE/bills/$BILLID" -o "$TMP/bd_ok.html"
-chk "足额收款后状态变为已结账" "$(grep -c '已结账' "$TMP/bd_ok.html")" "1"
+chk "足额收款后状态变为已结账" "$(badge_count "$TMP/bd_ok.html" '已结账')" "1"
 has "收款记录显示【收款合计】" "$(cat "$TMP/bd_ok.html")" '收款合计'
 
 echo
@@ -193,7 +211,7 @@ post_form "$BASE/bills/$BILLID/settle" "$CJ" "$T" \
   --data-urlencode "deposit=100.00" --data-urlencode "paidAmount=$PAY_EXTRA" \
   --data-urlencode "payMethod=WECHAT" --data-urlencode "remark=押金抵扣口径测试" > /dev/null
 curl -s -b "$CJ" "$BASE/bills/$BILLID" -o "$TMP/bd2_ok.html"
-chk "带押金的账单结账成功" "$(grep -c '已结账' "$TMP/bd2_ok.html")" "1"
+chk "带押金的账单结账成功" "$(badge_count "$TMP/bd2_ok.html" '已结账')" "1"
 
 REV_AFTER=$(yuan "$(dash_total "$CJ")")
 EXPECT=$((REV_BEFORE + $(yuan "$TOTAL")))

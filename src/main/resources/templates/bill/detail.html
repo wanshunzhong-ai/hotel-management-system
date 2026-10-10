@@ -22,6 +22,9 @@
                                       th:text="${bill.status.label}">待结账</span>
                             </h2>
                             <div class="d-flex gap-2">
+                                <a th:href="@{/bills/{id}/print(id=${bill.id})}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-printer me-1"></i>打印账单
+                                </a>
                                 <a th:href="@{/reservations/{id}(id=${bill.reservation.id})}"
                                    class="btn btn-sm btn-outline-secondary">查看订单</a>
                                 <a th:href="@{/bills}" class="btn btn-sm btn-outline-secondary">返回列表</a>
@@ -50,6 +53,15 @@
                                     <div class="text-muted-sm" th:text="'操作人 ' + ${bill.operator}">—</div>
                                 </div>
                             </div>
+
+                            <!-- 提前离店提示（第三批 §1.5） -->
+                            <div th:if="${bill.isEarlyCheckout}" class="alert alert-info py-2 mb-0">
+                                <i class="bi bi-box-arrow-right me-1"></i>
+                                客人提前离店：计划 <b th:text="${bill.reservation.nightCount}">0</b> 晚，
+                                实际 <b th:text="${bill.reservation.actualNightCount}">0</b> 晚，
+                                房费已按实际住夜重算，减免
+                                <b th:text="'￥' + ${#numbers.formatDecimal(bill.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">￥0</b>。
+                            </div>
                         </div>
                     </div>
 
@@ -58,9 +70,12 @@
                         <div class="card-header">
                             <h2><i class="bi bi-bag-plus me-2 text-primary"></i>消费明细</h2>
                             <span class="text-muted-sm" th:if="${bill.status.name() == 'UNPAID'}">可继续追加消费项目</span>
+                            <span class="text-muted-sm" th:unless="${bill.status.name() == 'UNPAID'}">
+                                已结账，明细锁定（如需更正请联系管理员反结账）
+                            </span>
                         </div>
                         <div class="table-wrap">
-                            <table class="table">
+                            <table class="table table-sticky-first">
                                 <thead>
                                 <tr>
                                     <th>项目名称</th>
@@ -112,10 +127,22 @@
                                         th:text="'￥' + ${#numbers.formatDecimal(bill.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
                                     <td colspan="2"></td>
                                 </tr>
+                                <tr style="background:#f8fafc" th:if="${bill.isEarlyCheckout}">
+                                    <td colspan="3" class="text-end">其中提前离店减免</td>
+                                    <td class="text-end money" style="color:#0f9d58"
+                                        th:text="'-￥' + ${#numbers.formatDecimal(bill.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">—</td>
+                                    <td colspan="2" class="text-muted-sm">已体现在房费中</td>
+                                </tr>
                                 <tr style="background:#f8fafc">
                                     <td colspan="3" class="text-end"><b>其他消费</b></td>
                                     <td class="text-end money"
                                         th:text="'￥' + ${#numbers.formatDecimal(bill.otherAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                <tr style="background:#f8fafc" th:if="${bill.isDiscounted}">
+                                    <td colspan="3" class="text-end"><b>折扣 / 减免</b></td>
+                                    <td class="text-end money" style="color:#0f9d58"
+                                        th:text="'-￥' + ${#numbers.formatDecimal(bill.discountAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
                                     <td colspan="2"></td>
                                 </tr>
                                 <tr style="background:#eef4ff">
@@ -162,6 +189,51 @@
 
                 <!-- 右侧：结算 -->
                 <div class="col-lg-4">
+                    <div class="card mb-3" th:if="${bill.status.name() == 'UNPAID'}">
+                        <div class="card-header">
+                            <h2><i class="bi bi-tags me-2 text-primary"></i>折扣 / 减免</h2>
+                            <span class="text-muted-sm" th:if="${bill.isDiscounted}"
+                                  th:text="'当前 ￥' + ${#numbers.formatDecimal(bill.discountAmount, 1, 'COMMA', 2, 'POINT')}">—</span>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/bills/{id}/discount(id=${bill.id})}" method="post"
+                                  sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-5">
+                                        <label class="form-label" for="discountAmount">折扣金额</label>
+                                        <input type="number" step="0.01" min="0" class="form-control form-control-sm"
+                                               id="discountAmount" name="discountAmount"
+                                               th:value="${#numbers.formatDecimal(bill.discountAmount, 1, 'COMMA', 2, 'POINT')}">
+                                    </div>
+                                    <div class="col-7">
+                                        <label class="form-label" for="discountReason">原因（写入备注与日志）</label>
+                                        <input type="text" class="form-control form-control-sm" id="discountReason"
+                                               name="reason" placeholder="如：协议价 / 抹零 / 老客优惠">
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+                                            <i class="bi bi-check2 me-1"></i>应用折扣（填 0 取消折扣）
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                            <div class="text-muted-sm mt-2">
+                                应收合计 = 房费 + 其他消费 − 折扣。折扣会留痕，避免用「负数消费」变通。
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 备注 / 变更留痕：折扣原因、反结账原因都写在这里。
+                         必须与账单状态无关地展示，否则「待结账」时看不到折扣原因。 -->
+                    <div class="card mb-3" th:if="${bill.remark}">
+                        <div class="card-header">
+                            <h2><i class="bi bi-journal-text me-2 text-primary"></i>备注 / 变更留痕</h2>
+                        </div>
+                        <div class="card-body text-muted-sm" style="line-height:1.9">
+                            <span th:text="${bill.remark}">—</span>
+                        </div>
+                    </div>
+
                     <div class="card mb-3" th:if="${bill.status.name() == 'UNPAID'}">
                         <div class="card-header"><h2><i class="bi bi-cash-coin me-2 text-primary"></i>结账收款</h2></div>
                         <div class="card-body">
@@ -223,7 +295,7 @@
                         </div>
                     </div>
 
-                    <div class="card" th:if="${bill.status.name() != 'UNPAID'}">
+                    <div class="card mb-3" th:if="${bill.status.name() != 'UNPAID'}">
                         <div class="card-header"><h2><i class="bi bi-patch-check me-2 text-success"></i>收款记录</h2></div>
                         <div class="card-body text-muted-sm" style="line-height:2">
                             <div class="d-flex justify-content-between"><span>押金</span>
@@ -240,17 +312,33 @@
                                 <span th:text="${bill.settledAt == null ? '—' : #temporals.format(bill.settledAt,'yyyy-MM-dd HH:mm')}">—</span></div>
                             <div class="d-flex justify-content-between"><span>操作人</span>
                                 <span th:text="${bill.operator} ?: '—'">—</span></div>
-                            <div th:if="${bill.remark}" class="mt-2">备注：<span th:text="${bill.remark}"></span></div>
                         </div>
                     </div>
 
-                    <div class="card mt-3">
+                    <!-- 反结账（仅管理员，第三批 §2.6） -->
+                    <div class="card mb-3" th:if="${bill.status.name() == 'SETTLED'}"
+                         sec:authorize="hasRole('ADMIN')">
+                        <div class="card-header"><h2><i class="bi bi-arrow-counterclockwise me-2 text-danger"></i>反结账</h2></div>
+                        <div class="card-body">
+                            <p class="text-muted-sm mb-2">
+                                金额录错或支付方式选错时使用。执行后账单回到「待结账」，
+                                押金 / 收款 / 应退会被清空以便重新录入；原结算信息写入操作日志，可追溯。
+                            </p>
+                            <button type="button" class="btn btn-sm btn-outline-danger w-100"
+                                    data-bs-toggle="modal" data-bs-target="#unsettleModal">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>反结账（需填写原因）
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card">
                         <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>结算说明</h2></div>
                         <div class="card-body text-muted-sm" style="line-height:2">
-                            <p class="mb-2">应收合计 = 房费 + 其他消费。</p>
+                            <p class="mb-2">应收合计 = 房费 + 其他消费 − 折扣。</p>
+                            <p class="mb-2">房费按<b>实际住夜数</b>计算，提前离店的减免已体现在房费里。</p>
                             <p class="mb-2">应退 = 押金 + 本次收款 − 应收合计，为正表示需退给客人。</p>
                             <p class="mb-2">收款必须<b>足额</b>（押金 + 本次收款 ≥ 应收合计）才能结账；客人暂时付不清时请保留为「待结账」。</p>
-                            <p class="mb-0">结账后账单将锁定，不能再增删消费项目。</p>
+                            <p class="mb-0">结账后账单将锁定，如需更正请由管理员「反结账」。</p>
                         </div>
                     </div>
                 </div>
@@ -259,6 +347,37 @@
         <footer th:replace="~{fragments/layout :: footer}"></footer>
     </div>
 </div>
+
+<!-- 反结账弹窗 -->
+<div class="modal fade" id="unsettleModal" tabindex="-1" aria-hidden="true"
+     th:if="${bill.status.name() == 'SETTLED'}" sec:authorize="hasRole('ADMIN')">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form th:action="@{/bills/{id}/unsettle(id=${bill.id})}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>反结账</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger py-2 mb-3" style="font-size:13px">
+                        此操作会把账单 <span class="mono" th:text="${bill.billNo}">—</span> 退回「待结账」，
+                        并清空已录入的押金与收款金额。原结算信息会记入操作日志。
+                    </div>
+                    <label class="form-label required" for="unsettleReason">反结账原因</label>
+                    <textarea class="form-control" id="unsettleReason" name="reason" rows="3" required
+                              placeholder="如：支付方式选错，客人实际刷的是银行卡"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-check2 me-1"></i>确认反结账
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div th:replace="~{fragments/layout :: scripts}"></div>
 
 <script>

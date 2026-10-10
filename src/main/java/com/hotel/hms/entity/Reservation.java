@@ -66,6 +66,14 @@ public class Reservation extends BaseEntity {
     @Column(name = "check_out_date", nullable = false)
     private LocalDate checkOutDate;
 
+    /**
+     * 实际离店日期（第三批 §1.5）。
+     * <p>提前退房时这里会早于 {@link #checkOutDate}，房费按这里重算。
+     * 按时退房时与计划日期相同；未退房时为 {@code null}。
+     */
+    @Column(name = "actual_check_out_date")
+    private LocalDate actualCheckOutDate;
+
     /** 入住人数 */
     @Min(value = 1, message = "入住人数至少 1 人")
     @Column(name = "guest_count", nullable = false)
@@ -94,7 +102,7 @@ public class Reservation extends BaseEntity {
     @Column(length = 200)
     private String remark;
 
-    /** 住店晚数 */
+    /** 计划住店晚数（离店日期 − 入住日期） */
     public long getNightCount() {
         if (checkInDate == null || checkOutDate == null) {
             return 0;
@@ -103,12 +111,54 @@ public class Reservation extends BaseEntity {
         return Math.max(nights, 0);
     }
 
-    /** 房费小计 */
+    /**
+     * 实际住店晚数（第三批 §1.5）。
+     * <p>以 {@link #actualCheckOutDate} 为准，不足一天按一天计；
+     * 未退房（{@code actualCheckOutDate} 为 null）时回落到计划晚数。
+     */
+    public long getActualNightCount() {
+        if (checkInDate == null) {
+            return 0;
+        }
+        if (actualCheckOutDate == null) {
+            return getNightCount();
+        }
+        return Math.max(ChronoUnit.DAYS.between(checkInDate, actualCheckOutDate), 1);
+    }
+
+    /** 计划房费小计（按计划晚数） */
     public BigDecimal getRoomAmount() {
         if (unitPrice == null) {
             return BigDecimal.ZERO;
         }
         return unitPrice.multiply(BigDecimal.valueOf(getNightCount()));
+    }
+
+    /**
+     * 实际应结房费（按实际晚数）。
+     * <p>提前离店时小于 {@link #getRoomAmount()}，差额见 {@link #getEarlyCheckoutDiscount()}。
+     */
+    public BigDecimal getActualRoomAmount() {
+        if (unitPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(BigDecimal.valueOf(getActualNightCount()));
+    }
+
+    /**
+     * 提前离店减免额 = 计划房费 − 实际房费。
+     * <p>只用于账单上展示「提前离店减免 ￥X」，账单的 {@code roomAmount} 已经取实际值，
+     * 因此这个数字<b>不参与</b>应收合计的二次扣减，避免重复减免。
+     */
+    public BigDecimal getEarlyCheckoutDiscount() {
+        BigDecimal diff = getRoomAmount().subtract(getActualRoomAmount());
+        return diff.signum() > 0 ? diff : BigDecimal.ZERO;
+    }
+
+    /** 是否属于提前离店 */
+    public boolean isEarlyCheckout() {
+        return actualCheckOutDate != null && checkOutDate != null
+                && actualCheckOutDate.isBefore(checkOutDate);
     }
 
     /** 是否可以办理入住 */

@@ -23,11 +23,10 @@
                               th:action="@{/reservations/{id}/checkin(id=${reservation.id})}" method="post">
                             <button class="btn btn-sm btn-accent"><i class="bi bi-box-arrow-in-right me-1"></i>办理入住</button>
                         </form>
-                        <form th:if="${reservation.checkOutAllowed}"
-                              th:action="@{/reservations/{id}/checkout(id=${reservation.id})}" method="post"
-                              data-confirm="确认退房并生成账单？">
-                            <button class="btn btn-sm btn-primary"><i class="bi bi-box-arrow-right me-1"></i>办理退房</button>
-                        </form>
+                        <button th:if="${reservation.checkOutAllowed}" type="button"
+                                class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#checkoutModal">
+                            <i class="bi bi-box-arrow-right me-1"></i>办理退房
+                        </button>
                         <a th:if="${reservation.status.name() == 'BOOKED'}"
                            th:href="@{/reservations/{id}/edit(id=${reservation.id})}"
                            class="btn btn-sm btn-outline-secondary">改单</a>
@@ -64,8 +63,13 @@
                         <div class="col-md-3">
                             <div class="text-muted-sm">房费</div>
                             <div class="money-lg"
+                                 th:if="${!reservation.earlyCheckout}"
                                  th:text="'￥' + ${#numbers.formatDecimal(reservation.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</div>
+                            <div class="money-lg" th:if="${reservation.earlyCheckout}"
+                                 th:text="'￥' + ${#numbers.formatDecimal(reservation.actualRoomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</div>
                             <div class="text-muted-sm" th:text="'￥' + ${#numbers.formatDecimal(reservation.unitPrice, 1, 'COMMA', 2, 'POINT')} + ' / 晚'">—</div>
+                            <div class="text-muted-sm" th:if="${reservation.earlyCheckout}" style="color:#0f9d58"
+                                 th:text="'实际 ' + ${reservation.actualNightCount} + ' 晚 · 提前离店减免 ￥' + ${#numbers.formatDecimal(reservation.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">—</div>
                         </div>
                         <div class="col-md-3">
                             <div class="text-muted-sm">操作人</div>
@@ -110,6 +114,9 @@
                                     <div><b>办理退房</b></div>
                                     <div class="text-muted-sm"
                                          th:text="${reservation.checkOutTime == null ? '尚未退房' : #temporals.format(reservation.checkOutTime,'yyyy-MM-dd HH:mm')}">—</div>
+                                    <div class="text-muted-sm" th:if="${reservation.actualCheckOutDate != null}"
+                                         th:text="'实际离店 ' + ${#temporals.format(reservation.actualCheckOutDate,'yyyy-MM-dd')}
+                                                  + ' · 实际住 ' + ${reservation.actualNightCount} + ' 晚'">—</div>
                                 </div>
                             </div>
                         </div>
@@ -136,6 +143,97 @@
         <footer th:replace="~{fragments/layout :: footer}"></footer>
     </div>
 </div>
+
+<!-- 退房弹窗：第三批 §1.5 支持填写实际离店日期，房费按实际住夜重算 -->
+<div class="modal fade" id="checkoutModal" tabindex="-1" aria-hidden="true"
+     th:if="${reservation.checkOutAllowed}"
+     th:attr="data-unit-price=${reservation.unitPrice},
+              data-check-in=${reservation.checkInDate},
+              data-check-out=${reservation.checkOutDate}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form th:action="@{/reservations/{id}/checkout(id=${reservation.id})}" method="post" id="checkoutForm">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-box-arrow-right me-2"></i>办理退房</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                        按计划离店日期办理即可；客人<b>提前离店</b>时把日期改早，房费会按实际住夜数重算，
+                        差额自动记为「提前离店减免」。
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label required" for="actualCheckOutDate">实际离店日期</label>
+                        <input type="date" class="form-control" id="actualCheckOutDate" name="actualCheckOutDate"
+                               th:min="${reservation.checkInDate}" th:max="${reservation.checkOutDate}"
+                               th:value="${#temporals.format(reservation.checkOutDate,'yyyy-MM-dd')}" required>
+                        <div class="text-muted-sm mt-1"
+                             th:text="'入住 ' + ${#temporals.format(reservation.checkInDate,'yyyy-MM-dd')}
+                                      + ' · 计划 ' + ${reservation.nightCount} + ' 晚 · 最晚 '
+                                      + ${#temporals.format(reservation.checkOutDate,'yyyy-MM-dd')}">—</div>
+                    </div>
+                    <div class="p-3" style="background:#f8fafc;border-radius:11px">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted-sm">实际住夜</span>
+                            <span class="money" id="coNights">—</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted-sm">实际房费</span>
+                            <span class="money fw-bold" id="coActual">—</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted-sm">提前离店减免</span>
+                            <span class="money" id="coDiscount" style="color:#0f9d58">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check2-circle me-1"></i>确认退房并生成账单
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div th:replace="~{fragments/layout :: scripts}"></div>
+
+<script th:if="${reservation.checkOutAllowed}">
+    (function () {
+        const modal = document.getElementById('checkoutModal');
+        const input = document.getElementById('actualCheckOutDate');
+        if (!modal || !input) return;
+
+        const unitPrice = Number(modal.getAttribute('data-unit-price') || 0);
+        const checkIn = new Date(modal.getAttribute('data-check-in') + 'T00:00:00');
+        const checkOut = new Date(modal.getAttribute('data-check-out') + 'T00:00:00');
+        const plannedNights = Math.max(Math.round((checkOut - checkIn) / 86400000), 0);
+
+        function recalc() {
+            const picked = new Date(input.value + 'T00:00:00');
+            if (isNaN(picked)) return;
+            // 后端口径：不足一天按一天
+            const nights = Math.max(Math.round((picked - checkIn) / 86400000), 1);
+            const actual = unitPrice * nights;
+            const discount = Math.max(unitPrice * plannedNights - actual, 0);
+            document.getElementById('coNights').textContent = nights + ' 晚';
+            document.getElementById('coActual').textContent = window.formatMoney(actual);
+            document.getElementById('coDiscount').textContent = window.formatMoney(discount);
+        }
+
+        input.addEventListener('change', recalc);
+        // max= 是计划离店日；客人住超了不属于本批范围，前端先拦住
+        document.getElementById('checkoutForm').addEventListener('submit', function (e) {
+            const picked = new Date(input.value + 'T00:00:00');
+            if (isNaN(picked) || picked < checkIn || picked > checkOut) {
+                e.preventDefault();
+                window.alert('实际离店日期需在入住日与计划离店日之间。');
+            }
+        });
+        recalc();
+    })();
+</script>
 </body>
 </html>

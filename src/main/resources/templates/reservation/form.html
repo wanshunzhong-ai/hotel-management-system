@@ -28,15 +28,29 @@
 
                                 <div class="row g-3">
                                     <div class="col-md-12">
-                                        <label class="form-label required" for="customerId">客户</label>
-                                        <div class="input-group">
-                                            <select class="form-select" id="customerId" th:field="*{customerId}">
-                                                <option value="">请选择客户</option>
-                                                <option th:each="c : ${customers}" th:value="${c.id}"
-                                                        th:text="${c.name} + ' · ' + ${c.phone} + ' · ' + ${c.memberLevel}"></option>
-                                            </select>
-                                            <a th:href="@{/customers/new}" class="btn btn-outline-secondary"
-                                               title="新建客户档案"><i class="bi bi-person-plus"></i></a>
+                                        <label class="form-label required" for="customerSearch">客户</label>
+                                        <div class="d-flex gap-2 align-items-start">
+                                            <div class="picker flex-grow-1" id="customerPicker"
+                                                 th:classappend="${selectedCustomer != null} ? 'is-selected'">
+                                                <div class="picker-input-wrap">
+                                                    <input type="text" class="form-control picker-input"
+                                                           id="customerSearch" autocomplete="off"
+                                                           placeholder="输入姓名或手机号搜索客户"
+                                                           th:value="${selectedCustomer != null} ? ${selectedCustomer.display()} : ''">
+                                                    <button type="button" class="picker-clear" id="customerClear"
+                                                            title="清除已选客户" tabindex="-1">&times;</button>
+                                                </div>
+                                                <div class="picker-list" id="customerList"></div>
+                                            </div>
+                                            <input type="hidden" id="customerId" th:field="*{customerId}">
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                    data-bs-toggle="modal" data-bs-target="#customerModal"
+                                                    title="新建客户档案">
+                                                <i class="bi bi-person-plus"></i>
+                                            </button>
+                                        </div>
+                                        <div class="text-muted-sm mt-1" style="font-size:12px">
+                                            输入手机号前几位即可定位到客人，不用翻找下拉列表；列表里没有的客人可直接建档并自动选中。
                                         </div>
                                         <div class="text-danger mt-1" style="font-size:12px"
                                              th:if="${#fields.hasErrors('customerId')}" th:errors="*{customerId}"></div>
@@ -127,6 +141,77 @@
                                 <b class="money" th:text="'￥' + ${#numbers.formatDecimal(reservation.roomAmount, 1, 'COMMA', 2, 'POINT')}">—</b>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 内联新建客户：不跳转页面，保存后自动选中，避免已填的预订信息丢失 -->
+            <div class="modal fade" id="customerModal" tabindex="-1" aria-labelledby="customerModalTitle"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <!-- data-no-lock：提交按钮由下面的 fetch 流程自行管理，跳过全局防重复点击 -->
+                        <form id="customerQuickForm" th:action="@{/customers/quick}" method="post" data-no-lock>
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="customerModalTitle">
+                                    <i class="bi bi-person-plus me-2 text-primary"></i>新建客户档案
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                        aria-label="关闭"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-danger py-2 d-none" id="customerQuickAlert"></div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="qName">姓名</label>
+                                        <input type="text" class="form-control" id="qName" name="name" maxlength="50">
+                                        <div class="quick-form-error" data-error-for="name"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="qPhone">手机号</label>
+                                        <input type="text" class="form-control" id="qPhone" name="phone"
+                                               maxlength="20" placeholder="11 位手机号">
+                                        <div class="quick-form-error" data-error-for="phone"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="qGender">性别</label>
+                                        <select class="form-select" id="qGender" name="gender">
+                                            <option th:each="g : ${genders}" th:value="${g}" th:text="${g.label}"
+                                                    th:selected="${g.name() == 'MALE'}"></option>
+                                        </select>
+                                        <div class="quick-form-error" data-error-for="gender"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="qIdType">证件类型</label>
+                                        <select class="form-select" id="qIdType" name="idType">
+                                            <option th:each="t : ${idTypes}" th:value="${t}" th:text="${t.label}"></option>
+                                        </select>
+                                        <div class="quick-form-error" data-error-for="idType"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="qMemberLevel">会员等级</label>
+                                        <select class="form-select" id="qMemberLevel" name="memberLevel">
+                                            <option th:each="m : ${memberLevels}" th:value="${m}" th:text="${m}"></option>
+                                        </select>
+                                        <div class="quick-form-error" data-error-for="memberLevel"></div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label required" for="qIdNo">证件号码</label>
+                                        <input type="text" class="form-control" id="qIdNo" name="idNo" maxlength="40"
+                                               placeholder="18 位身份证号 / 护照号">
+                                        <div class="quick-form-error" data-error-for="idNo"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                    取消
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存并选中
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -238,6 +323,84 @@
         if (guestCount) guestCount.addEventListener('input', updateSummary);
         syncCheckOutMin();
         loadRooms();
+
+        // ------------------------------------------------ 客户选择器
+        const picker = window.initCustomerPicker({
+            rootId: 'customerPicker',
+            inputId: 'customerSearch',
+            hiddenId: 'customerId',
+            listId: 'customerList',
+            clearId: 'customerClear'
+        });
+
+        // -------------------------------------- 内联新建客户（不离开本页）
+        const quickForm = document.getElementById('customerQuickForm');
+        if (quickForm) {
+            const modalEl = document.getElementById('customerModal');
+            const alertBox = document.getElementById('customerQuickAlert');
+            const submitBtn = quickForm.querySelector('button[type="submit"]');
+            let modalInstance = null;
+
+            function clearQuickErrors() {
+                alertBox.classList.add('d-none');
+                alertBox.textContent = '';
+                quickForm.querySelectorAll('.quick-form-error').forEach(function (el) {
+                    el.textContent = '';
+                });
+            }
+
+            function showQuickErrors(errors, message) {
+                clearQuickErrors();
+                Object.keys(errors || {}).forEach(function (field) {
+                    const target = quickForm.querySelector('[data-error-for="' + field + '"]');
+                    if (target) {
+                        target.textContent = errors[field];
+                    }
+                });
+                if (message) {
+                    alertBox.textContent = message;
+                    alertBox.classList.remove('d-none');
+                }
+            }
+
+            modalEl.addEventListener('shown.bs.modal', function () {
+                clearQuickErrors();
+                const first = document.getElementById('qName');
+                if (first) first.focus();
+            });
+
+            quickForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                clearQuickErrors();
+                submitBtn.disabled = true;
+                fetch(quickForm.action, {
+                    method: 'POST',
+                    body: new FormData(quickForm),
+                    headers: { 'Accept': 'application/json' }
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data && data.ok && data.customer) {
+                            // 建档成功：直接选中新客户，预订表单里的日期/房间/人数全部保留
+                            if (picker) picker.select(data.customer);
+                            quickForm.reset();
+                            if (!modalInstance) {
+                                modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                            }
+                            modalInstance.hide();
+                            return;
+                        }
+                        showQuickErrors(data && data.errors,
+                            (data && data.message) || '保存失败，请检查后重试');
+                    })
+                    .catch(function () {
+                        showQuickErrors({}, '网络异常，保存失败，请重试');
+                    })
+                    .finally(function () {
+                        submitBtn.disabled = false;
+                    });
+            });
+        }
     })();
 </script>
 </body>

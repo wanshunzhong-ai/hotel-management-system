@@ -54,7 +54,7 @@ public class Bill extends BaseEntity {
     @JoinColumn(name = "room_id", nullable = false)
     private Room room;
 
-    /** 房费合计 */
+    /** 房费合计（已按实际住夜数计算，提前离店时小于计划房费） */
     @Column(name = "room_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal roomAmount = BigDecimal.ZERO;
 
@@ -62,11 +62,28 @@ public class Bill extends BaseEntity {
     @Column(name = "other_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal otherAmount = BigDecimal.ZERO;
 
+    /**
+     * 人工折扣 / 减免（第三批 §2.6）。
+     * <p>协议价、抹零等优惠走这个字段，而不是「追加一笔负单价的消费」——
+     * 后者无法审计，也容易被误当成退款。
+     */
+    @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    /**
+     * 提前离店减免额（第三批 §1.5）。
+     * <p><b>仅用于账单展示与审计</b>：{@link #roomAmount} 已经是按实际住夜数算好的金额，
+     * 这个字段记录「计划房费 − 实际房费」的差额。它<b>不参与</b> {@link #totalAmount} 的二次扣减，
+     * 否则会重复减免。
+     */
+    @Column(name = "early_checkout_discount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal earlyCheckoutDiscount = BigDecimal.ZERO;
+
     /** 入住时已收的押金（可用于抵扣应收） */
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal deposit = BigDecimal.ZERO;
 
-    /** 应收合计 = 房费 + 其他消费 */
+    /** 应收合计 = 房费 + 其他消费 − 折扣 */
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -108,9 +125,12 @@ public class Bill extends BaseEntity {
         this.items.add(item);
     }
 
-    /** 折扣/优惠后差额：实收 - 应收 */
-    public BigDecimal getDifference() {
-        return paidAmount.subtract(totalAmount);
+    /**
+     * 结账时客人还差多少。
+     * <p>正数 = 欠款，0 或负数 = 已付清或需找零。
+     */
+    public BigDecimal getDueAmount() {
+        return totalAmount.subtract(deposit).subtract(paidAmount);
     }
 
     /**
@@ -119,5 +139,15 @@ public class Bill extends BaseEntity {
      */
     public BigDecimal getReceivedAmount() {
         return deposit.add(paidAmount);
+    }
+
+    /** 是否发生过提前离店减免 */
+    public boolean isEarlyCheckout() {
+        return earlyCheckoutDiscount != null && earlyCheckoutDiscount.signum() > 0;
+    }
+
+    /** 是否有过折扣 */
+    public boolean isDiscounted() {
+        return discountAmount != null && discountAmount.signum() > 0;
     }
 }

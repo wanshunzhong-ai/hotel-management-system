@@ -2,6 +2,8 @@ package com.hotel.hms.repository;
 
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.ReservationStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -88,6 +90,64 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                         @Param("checkOut") LocalDate checkOut,
                         @Param("excludeId") Long excludeId);
 
+    /**
+     * 该晚（半开区间 {@code [date, date+1)}）占用客房的全部有效预订单。
+     * <p>房态图按日期渲染时用它一次性取回全部占用信息，避免逐房查询。
+     */
+    @Query("""
+            select r from Reservation r
+            join fetch r.customer
+            join fetch r.room
+            where r.status in (com.hotel.hms.entity.ReservationStatus.BOOKED,
+                               com.hotel.hms.entity.ReservationStatus.CHECKED_IN)
+              and r.checkInDate <= :date
+              and r.checkOutDate > :date
+            order by r.room.roomNo asc
+            """)
+    List<Reservation> findOccupyingOn(@Param("date") LocalDate date);
+
+    /**
+     * 该晚已售房数（去重房间）。
+     * <p>出租率口径：已售房 / 可售房，离店当天不占房（半开区间）。
+     */
+    @Query("""
+            select count(distinct r.room.id) from Reservation r
+            where r.status in (com.hotel.hms.entity.ReservationStatus.BOOKED,
+                               com.hotel.hms.entity.ReservationStatus.CHECKED_IN)
+              and r.checkInDate <= :date
+              and r.checkOutDate > :date
+            """)
+    long countOccupiedRoomsOn(@Param("date") LocalDate date);
+
+    /** 该房间是否还有其它有效订单（用于判断能否释放/删除） */
+    @Query("""
+            select count(r) from Reservation r
+            where r.room.id = :roomId
+              and r.status in (com.hotel.hms.entity.ReservationStatus.BOOKED,
+                               com.hotel.hms.entity.ReservationStatus.CHECKED_IN)
+              and (:excludeId is null or r.id <> :excludeId)
+            """)
+    long countActiveByRoom(@Param("roomId") Long roomId, @Param("excludeId") Long excludeId);
+
+    /** 该房间当前的在住订单数（办理入住前的兜底校验） */
+    @Query("""
+            select count(r) from Reservation r
+            where r.room.id = :roomId
+              and r.status = com.hotel.hms.entity.ReservationStatus.CHECKED_IN
+              and (:excludeId is null or r.id <> :excludeId)
+            """)
+    long countInHouseByRoom(@Param("roomId") Long roomId, @Param("excludeId") Long excludeId);
+
+    /**
+     * 预订单列表查询（分页 + 多条件筛选）。
+     *
+     * <p>排序不写死在这里，由调用方通过 {@link Pageable} 传入白名单内的 {@code Sort}，
+     * 这样「最新创建 / 入住日期升降序 / 房号」可以在页面上切换。
+     *
+     * @param checkInFrom 入住日期下限（含），可为 null
+     * @param checkInTo   入住日期上限（含），可为 null
+     * @param floor       楼层，可为 null
+     */
     @Query("""
             select r from Reservation r
             where (:keyword is null
@@ -96,8 +156,14 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                    or r.customer.phone like concat('%', :keyword, '%')
                    or r.room.roomNo like concat('%', :keyword, '%'))
               and (:status is null or r.status = :status)
-            order by r.id desc
+              and (:checkInFrom is null or r.checkInDate >= :checkInFrom)
+              and (:checkInTo is null or r.checkInDate <= :checkInTo)
+              and (:floor is null or r.room.floor = :floor)
             """)
-    List<Reservation> search(@Param("keyword") String keyword,
-                             @Param("status") ReservationStatus status);
+    Page<Reservation> search(@Param("keyword") String keyword,
+                             @Param("status") ReservationStatus status,
+                             @Param("checkInFrom") LocalDate checkInFrom,
+                             @Param("checkInTo") LocalDate checkInTo,
+                             @Param("floor") Integer floor,
+                             Pageable pageable);
 }

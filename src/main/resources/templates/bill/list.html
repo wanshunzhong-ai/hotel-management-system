@@ -16,18 +16,44 @@
                         <div>
                             <label class="form-label">关键词</label>
                             <input type="text" class="form-control" name="keyword" th:value="${keyword}"
-                                   placeholder="账单号 / 客户姓名 / 房号" style="width:250px">
+                                   placeholder="账单号 / 姓名 / 手机号 / 房号" style="width:230px">
                         </div>
                         <div>
                             <label class="form-label">账单状态</label>
-                            <select class="form-select" name="status" style="width:150px">
+                            <select class="form-select" name="status" style="width:140px">
                                 <option value="">全部状态</option>
                                 <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
                                         th:selected="${status != null && status == s}"></option>
                             </select>
                         </div>
+                        <div>
+                            <label class="form-label">结账日期</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="date" class="form-control" name="settledFrom" style="width:150px"
+                                       th:value="${settledFrom}">
+                                <span class="text-muted-sm">~</span>
+                                <input type="date" class="form-control" name="settledTo" style="width:150px"
+                                       th:value="${settledTo}">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">排序</label>
+                            <select class="form-select" name="sort" style="width:170px">
+                                <option th:each="e : ${sortLabels}" th:value="${e.key}" th:text="${e.value}"
+                                        th:selected="${sort == e.key}"></option>
+                            </select>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
                         <a th:href="@{/bills}" class="btn btn-outline-secondary">重置</a>
+                        <a th:href="@{/bills/export(keyword=${keyword}, status=${status},
+                                                    settledFrom=${settledFrom}, settledTo=${settledTo}, sort=${sort})}"
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-download me-1"></i>导出 CSV
+                        </a>
+                        <a th:href="@{/bills(status='UNPAID')}" class="btn btn-accent ms-auto">
+                            <i class="bi bi-exclamation-circle me-1"></i>只看待结账
+                        </a>
                     </form>
                 </div>
             </div>
@@ -36,11 +62,10 @@
                 <div class="card-header">
                     <h2>
                         <i class="bi bi-receipt me-2 text-primary"></i>账单列表
-                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(bills)} + ' 张'">共 0 张</span>
                     </h2>
                 </div>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table table-sticky-first">
                         <thead>
                         <tr>
                             <th style="width:140px">账单号</th>
@@ -51,11 +76,11 @@
                             <th class="text-end" style="width:110px">应收合计</th>
                             <th class="text-end" style="width:110px">实收</th>
                             <th style="width:110px">状态</th>
-                            <th style="width:90px" class="text-end">操作</th>
+                            <th style="width:110px" class="text-end">操作</th>
                         </tr>
                         </thead>
                         <tbody>
-                        <tr th:each="b : ${bills}">
+                        <tr th:each="b : ${page.content}">
                             <td>
                                 <a th:href="@{/bills/{id}(id=${b.id})}" class="mono" th:text="${b.billNo}">BL202610100001</a>
                                 <div class="text-muted-sm"
@@ -79,19 +104,21 @@
                                       th:text="${b.status.label}">待结账</span>
                             </td>
                             <td class="text-end">
-                                <a th:href="@{/bills/{id}(id=${b.id})}" class="btn btn-sm btn-outline-secondary">
+                                <a th:href="@{/bills/{id}(id=${b.id})}"
+                                   class="btn btn-sm btn-outline-secondary text-nowrap">
                                     <i class="bi bi-eye"></i> 明细
                                 </a>
                             </td>
                         </tr>
-                        <tr th:if="${#lists.isEmpty(bills)}">
+                        <tr th:if="${page.totalElements == 0}">
                             <td colspan="9">
-                                <div class="empty-state"><i class="bi bi-receipt"></i>暂无账单记录，退房后会自动生成</div>
+                                <div class="empty-state"><i class="bi bi-receipt"></i>没有符合条件的账单，退房后会自动生成</div>
                             </td>
                         </tr>
                         </tbody>
                     </table>
                 </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
             </div>
         </main>
         <footer th:replace="~{fragments/layout :: footer}"></footer>

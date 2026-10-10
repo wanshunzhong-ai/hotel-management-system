@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('打印账单')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('bills')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('打印账单', '浏览器打印或另存为 PDF，可直接交给客人')}"></header>
+        <main class="app-content">
+
+            <div class="card mb-3 no-print">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印 / 另存 PDF
+                    </button>
+                    <a th:href="@{/bills/{id}(id=${bill.id})}" class="btn btn-outline-secondary">返回账单</a>
+                    <span class="text-muted-sm ms-auto">
+                        打印时会自动隐藏侧边栏、按钮与提示条，只留票据正文。
+                    </span>
+                </div>
+            </div>
+
+            <div class="card print-sheet">
+                <div class="card-body">
+                    <!-- 抬头 -->
+                    <div class="print-head">
+                        <div>
+                            <div class="print-hotel" th:text="${hotelName}">云栖大酒店</div>
+                            <div class="text-muted-sm">住宿结账单 / FOLIO</div>
+                        </div>
+                        <div class="text-end text-muted-sm">
+                            <div class="mono" th:text="${bill.billNo}">BL202610100001</div>
+                            <div th:text="'打印时间 ' + ${#temporals.format(#temporals.createNow(),'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- 主体信息 -->
+                    <div class="print-grid">
+                        <div><span class="text-muted-sm">客人</span><b th:text="${bill.customer.name}">张伟</b></div>
+                        <div><span class="text-muted-sm">手机号</span><span class="mono" th:text="${bill.customer.phone}">—</span></div>
+                        <div><span class="text-muted-sm">房间</span><b class="mono" th:text="${bill.room.roomNo}">201</b></div>
+                        <div><span class="text-muted-sm">房型</span><span th:text="${bill.room.roomType.name}">—</span></div>
+                        <div><span class="text-muted-sm">订单号</span><span class="mono" th:text="${bill.reservation.orderNo}">—</span></div>
+                        <div><span class="text-muted-sm">住店区间</span>
+                            <span th:text="${#temporals.format(bill.reservation.checkInDate,'yyyy-MM-dd')}
+                                           + ' → ' + ${#temporals.format(bill.reservation.checkOutDate,'yyyy-MM-dd')}">—</span>
+                        </div>
+                        <div th:if="${bill.reservation.actualCheckOutDate != null}">
+                            <span class="text-muted-sm">实际离店</span>
+                            <span th:text="${#temporals.format(bill.reservation.actualCheckOutDate,'yyyy-MM-dd')}
+                                           + '（住 ' + ${bill.reservation.actualNightCount} + ' 晚）'">—</span>
+                        </div>
+                        <div><span class="text-muted-sm">状态</span>
+                            <b th:text="${bill.status.label}">待结账</b>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- 消费明细 -->
+                    <table class="table print-table">
+                        <thead>
+                        <tr>
+                            <th>项目</th>
+                            <th class="text-end" style="width:100px">单价</th>
+                            <th class="text-center" style="width:70px">数量</th>
+                            <th class="text-end" style="width:110px">金额</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td>
+                                <b>客房房费</b>
+                                <div class="text-muted-sm"
+                                     th:text="${bill.reservation.checkInDate} + ' 至 ' + ${bill.reservation.checkOutDate}
+                                              + '（' + ${bill.reservation.nightCount} + ' 晚）'">—</div>
+                            </td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.reservation.unitPrice, 1, 'COMMA', 2, 'POINT')}">—</td>
+                            <td class="text-center" th:text="${bill.reservation.nightCount} + ' 晚'">—</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.isEarlyCheckout}">
+                            <td>
+                                <b>提前离店减免</b>
+                                <div class="text-muted-sm"
+                                     th:text="'计划 ' + ${bill.reservation.nightCount} + ' 晚，实际 ' + ${bill.reservation.actualNightCount} + ' 晚'">—</div>
+                            </td>
+                            <td class="text-end money">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-end money" style="color:#0f9d58"
+                                th:text="'-￥' + ${#numbers.formatDecimal(bill.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">—</td>
+                        </tr>
+                        <tr th:each="it : ${bill.items}">
+                            <td th:text="${it.itemName}">迷你吧饮品</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(it.unitPrice, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td class="text-center" th:text="${it.quantity}">1</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(it.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.isDiscounted}">
+                            <td><b>折扣 / 减免</b></td>
+                            <td class="text-end money">—</td>
+                            <td class="text-center">—</td>
+                            <td class="text-end money" style="color:#0f9d58"
+                                th:text="'-￥' + ${#numbers.formatDecimal(bill.discountAmount, 1, 'COMMA', 2, 'POINT')}">—</td>
+                        </tr>
+                        </tbody>
+                        <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end"><b>应收合计</b></td>
+                            <td class="text-end money print-total"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.status.name() != 'UNPAID'}">
+                            <td colspan="3" class="text-end">押金</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.deposit, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.status.name() != 'UNPAID'}">
+                            <td colspan="3" class="text-end">退房补付</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.paidAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.status.name() != 'UNPAID'}">
+                            <td colspan="3" class="text-end"><b>收款合计</b></td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.receivedAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr th:if="${bill.status.name() != 'UNPAID'}">
+                            <td colspan="3" class="text-end"><b>找零 / 应退客人</b></td>
+                            <td class="text-end money print-total"
+                                th:text="'￥' + ${#numbers.formatDecimal(bill.refundAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="print-grid mt-3">
+                        <div><span class="text-muted-sm">支付方式</span>
+                            <span th:text="${bill.payMethod == null ? '—' : bill.payMethod.label}">—</span></div>
+                        <div><span class="text-muted-sm">结账时间</span>
+                            <span th:text="${bill.settledAt == null ? '—' : #temporals.format(bill.settledAt,'yyyy-MM-dd HH:mm')}">—</span></div>
+                        <div><span class="text-muted-sm">操作人</span>
+                            <span th:text="${bill.operator} ?: '—'">—</span></div>
+                        <div th:if="${bill.remark}"><span class="text-muted-sm">备注</span>
+                            <span th:text="${bill.remark}">—</span></div>
+                    </div>
+
+                    <div class="print-sign">
+                        <div>客人签名：<span class="sign-line"></span></div>
+                        <div>收银员：<span class="sign-line"></span></div>
+                        <div>日期：<span class="sign-line"></span></div>
+                    </div>
+
+                    <div class="print-foot">
+                        本单据由 <span th:text="${hotelName}">云栖大酒店</span> 管理系统生成 ·
+                        应收合计 = 房费 + 其他消费 − 折扣
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
