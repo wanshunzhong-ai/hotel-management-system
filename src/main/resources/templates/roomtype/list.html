@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('房型设置')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('room-types')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房型设置', '维护房型、床型与门市价')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-layers me-2 text-primary"></i>房型列表</h2>
+                    <a th:href="@{/room-types/new}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-lg me-1"></i>新增房型
+                    </a>
+                </div>
+                <div class="table-wrap">
+                    <table class="table align-middle">
+                        <thead>
+                        <tr>
+                            <th style="width:70px">编号</th>
+                            <th>房型名称</th>
+                            <th>床型</th>
+                            <th class="text-center">面积</th>
+                            <th class="text-center">可住</th>
+                            <th class="text-end">门市价</th>
+                            <th>说明</th>
+                            <th class="text-center">状态</th>
+                            <th style="width:210px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="t, it : ${types}">
+                            <td class="text-muted" th:text="${t.id}">1</td>
+                            <td>
+                                <strong th:text="${t.name}">标准大床房</strong>
+                            </td>
+                            <td th:text="${t.bedType}">1.8m 大床</td>
+                            <td class="text-center" th:text="${t.area} + ' ㎡'">26 ㎡</td>
+                            <td class="text-center" th:text="${t.capacity} + ' 人'">2 人</td>
+                            <td class="text-end money" th:text="'￥' + ${#numbers.formatDecimal(t.price, 1, 'COMMA', 2, 'POINT')}">￥268.00</td>
+                            <td class="text-muted-sm" th:text="${t.description}">说明</td>
+                            <td class="text-center">
+                                <span class="badge-soft" th:classappend="${t.enabled} ? 'success' : 'secondary'"
+                                      th:text="${t.enabled} ? '启用' : '停用'">启用</span>
+                            </td>
+                            <td class="text-end">
+                                <a th:href="@{/room-types/{id}/rooms(id=${t.id})}" class="btn btn-sm btn-outline-secondary">
+                                    房间
+                                </a>
+                                <a th:href="@{/room-types/{id}/edit(id=${t.id})}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </a>
+                                <form th:action="@{/room-types/{id}/delete(id=${t.id})}" method="post"
+                                      class="d-inline" data-confirm="确定删除该房型吗？">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(types)}">
+                            <td colspan="9">
+                                <div class="empty-state"><i class="bi bi-layers"></i>还没有房型，先新增一个吧</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

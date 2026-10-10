@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('客户档案')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('customers')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客户档案', '住客信息与会员等级管理')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/customers}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="姓名 / 手机号 / 证件号" style="width:240px">
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/customers}" class="btn btn-outline-secondary">重置</a>
+                        <span class="text-muted-sm ms-auto">累计建档 <b th:text="${total}">0</b> 位客户</span>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-people me-2 text-primary"></i>客户列表
+                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(customers)} + ' 条'">共 0 条</span>
+                    </h2>
+                    <a th:href="@{/customers/new}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-person-plus me-1"></i>新增客户
+                    </a>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:60px">#</th>
+                            <th>姓名</th>
+                            <th>性别</th>
+                            <th>证件号</th>
+                            <th>手机号</th>
+                            <th>会员等级</th>
+                            <th>地址</th>
+                            <th style="width:200px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="c : ${customers}">
+                            <td class="text-muted" th:text="${c.id}">1</td>
+                            <td>
+                                <strong th:text="${c.name}">张伟</strong>
+                                <div class="text-muted-sm" th:text="${c.email} ?: ''">email</div>
+                            </td>
+                            <td th:text="${c.gender.label}">男</td>
+                            <td class="mono text-muted-sm" th:text="${c.idNoMasked}">110***********1234</td>
+                            <td class="mono" th:text="${c.phone}">13800000000</td>
+                            <td>
+                                <span class="badge-soft"
+                                      th:classappend="${c.memberLevel == '钻石' ? 'primary' : (c.memberLevel == '金卡' ? 'warning' : (c.memberLevel == '银卡' ? 'info' : 'secondary'))}"
+                                      th:text="${c.memberLevel} ?: '普通'">普通</span>
+                            </td>
+                            <td class="text-muted-sm" th:text="${c.address} ?: '—'">—</td>
+                            <td class="text-end">
+                                <a th:href="@{/reservations/new(customerId=${c.id})}" class="btn btn-sm btn-accent">
+                                    <i class="bi bi-calendar-plus"></i> 订房
+                                </a>
+                                <a th:href="@{/customers/{id}/edit(id=${c.id})}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/customers/{id}/delete(id=${c.id})}" method="post" class="d-inline"
+                                      data-confirm="确定删除该客户档案吗？">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(customers)}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-people"></i>没有找到客户档案</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

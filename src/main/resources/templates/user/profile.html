@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('个人中心')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('profile')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('个人中心', '账号信息与密码修改')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3">
+                <div class="col-lg-5">
+                    <div class="card h-100">
+                        <div class="card-header"><h2><i class="bi bi-person-badge me-2 text-primary"></i>账号信息</h2></div>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div class="user-avatar" style="width:54px;height:54px;font-size:19px"
+                                     th:text="${#strings.substring(user.realName,0,1)}">员</div>
+                                <div>
+                                    <div style="font-size:17px;font-weight:600" th:text="${user.realName}">姓名</div>
+                                    <span class="badge-soft"
+                                          th:classappend="${user.role.name() == 'ADMIN' ? 'danger' : (user.role.name() == 'RECEPTION' ? 'primary' : 'info')}"
+                                          th:text="${user.role.label}">角色</span>
+                                </div>
+                            </div>
+                            <div class="text-muted-sm" style="line-height:2.1">
+                                <div class="d-flex justify-content-between"><span>登录账号</span>
+                                    <b class="mono" th:text="${user.username}">—</b></div>
+                                <div class="d-flex justify-content-between"><span>手机号</span>
+                                    <span class="mono" th:text="${user.phone} ?: '—'">—</span></div>
+                                <div class="d-flex justify-content-between"><span>账号状态</span>
+                                    <span th:text="${user.enabled} ? '已启用' : '已停用'">—</span></div>
+                                <div class="d-flex justify-content-between"><span>创建时间</span>
+                                    <span th:text="${user.createdAt == null ? '—' : #temporals.format(user.createdAt,'yyyy-MM-dd HH:mm')}">—</span></div>
+                                <div class="d-flex justify-content-between"><span>角色说明</span>
+                                    <span th:text="${user.role.description}">—</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="card h-100">
+                        <div class="card-header"><h2><i class="bi bi-key me-2 text-primary"></i>修改密码</h2></div>
+                        <div class="card-body">
+                            <form th:action="@{/profile/password}" method="post" autocomplete="off"
+                                  style="max-width:420px">
+                                <div class="mb-3">
+                                    <label class="form-label required" for="oldPassword">原密码</label>
+                                    <input type="password" class="form-control" id="oldPassword" name="oldPassword" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label required" for="newPassword">新密码</label>
+                                    <input type="password" class="form-control" id="newPassword" name="newPassword"
+                                           minlength="6" required>
+                                    <div class="text-muted-sm mt-1">至少 6 位字符</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label required" for="confirmPassword">确认新密码</label>
+                                    <input type="password" class="form-control" id="confirmPassword"
+                                           name="confirmPassword" minlength="6" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存新密码
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('客户详情')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('customers')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客户详情', '住客基本信息')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-person-vcard me-2 text-primary"></i>档案信息</h2>
+                    <div class="d-flex gap-2">
+                        <a th:href="@{/reservations/new(customerId=${customer.id})}" class="btn btn-sm btn-accent">
+                            <i class="bi bi-calendar-plus me-1"></i>为该客户订房
+                        </a>
+                        <a th:href="@{/customers/{id}/edit(id=${customer.id})}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-pencil me-1"></i>编辑
+                        </a>
+                        <a th:href="@{/customers}" class="btn btn-sm btn-outline-secondary">返回</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3"><div class="text-muted-sm">姓名</div><div th:text="${customer.name}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">性别</div><div th:text="${customer.gender.label}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">会员等级</div><div th:text="${customer.memberLevel}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">手机号</div><div class="mono" th:text="${customer.phone}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">证件类型</div><div th:text="${customer.idType.label}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">证件号码</div><div class="mono" th:text="${customer.idNo}">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">电子邮箱</div><div th:text="${customer.email} ?: '—'">—</div></div>
+                        <div class="col-md-3"><div class="text-muted-sm">建档时间</div>
+                            <div th:text="${#temporals.format(customer.createdAt,'yyyy-MM-dd HH:mm')}">—</div></div>
+                        <div class="col-12"><div class="text-muted-sm">联系地址</div><div th:text="${customer.address} ?: '—'">—</div></div>
+                        <div class="col-12"><div class="text-muted-sm">备注</div><div th:text="${customer.remark} ?: '—'">—</div></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

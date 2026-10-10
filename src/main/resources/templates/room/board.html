@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('房态一览')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('room-board')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房态一览', '按楼层实时查看每一间房的状态')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <!-- 图例与筛选 -->
+            <div class="card mb-3">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="legend">
+                        <span th:each="s : ${statuses}" role="button" class="status-filter" th:attr="data-status=${s.name()}">
+                            <i class="dot" th:classappend="' dot-' + ${s.color}"></i>
+                            <span th:text="${s.label}">空闲</span>
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted-sm">点击图例筛选房态，再次点击取消</span>
+                        <a th:href="@{/rooms}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-list-ul me-1"></i>列表视图
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 楼层房态图 -->
+            <div th:each="entry : ${roomsByFloor}" class="card mb-3 floor-block">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-building me-2 text-primary"></i>
+                        <span th:text="${entry.key} + ' 层'">2 层</span>
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${#lists.size(entry.value)} + ' 间'">共 0 间</span>
+                    </h2>
+                    <div class="text-muted-sm">
+                        <span th:text="'空闲 ' + ${#lists.size(entry.value.?[status.name() == 'AVAILABLE'])} + ' · 在住 ' + ${#lists.size(entry.value.?[status.name() == 'OCCUPIED'])} + ' · 待清洁 ' + ${#lists.size(entry.value.?[status.name() == 'CLEANING'])}">—</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="room-board-grid">
+                        <div th:each="r : ${entry.value}" class="room-tile"
+                             th:classappend="'st-' + ${r.status.color}"
+                             th:attr="data-status=${r.status.name()}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="no" th:text="${r.roomNo}">201</div>
+                                    <div class="type" th:text="${r.roomType.name}">标准大床房</div>
+                                </div>
+                                <i th:class="'bi ' + ${r.status.icon} + ' text-muted'"></i>
+                            </div>
+                            <div class="foot">
+                                <span class="price"
+                                      th:text="'￥' + ${#numbers.formatDecimal(r.roomType.price, 1, 'COMMA', 0, 'POINT')}">￥268</span>
+                                <span class="badge-soft" th:classappend="${r.status.color}"
+                                      th:text="${r.status.label}">空闲</span>
+                            </div>
+
+                            <div class="mt-2 d-flex gap-1" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+                                <form th:if="${r.status.name() == 'CLEANING'}"
+                                      th:action="@{/rooms/{id}/clean(id=${r.id})}" method="post" class="flex-grow-1">
+                                    <input type="hidden" name="redirectTo" value="/rooms/board">
+                                    <button type="submit" class="btn btn-sm btn-accent w-100">
+                                        <i class="bi bi-stars me-1"></i>清洁完成
+                                    </button>
+                                </form>
+                                <form th:unless="${r.status.name() == 'CLEANING'}"
+                                      th:action="@{/rooms/{id}/status(id=${r.id})}" method="post" class="flex-grow-1">
+                                    <input type="hidden" name="redirectTo" value="/rooms/board">
+                                    <select class="form-select form-select-sm" name="status" onchange="this.form.submit()"
+                                            style="font-size:12px;padding:2px 6px">
+                                        <option value="" selected disabled>改房态</option>
+                                        <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"></option>
+                                    </select>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div th:if="${#maps.isEmpty(roomsByFloor)}" class="card">
+                <div class="card-body">
+                    <div class="empty-state"><i class="bi bi-building"></i>还没有客房数据</div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+
+<script>
+    (function () {
+        let activeStatus = null;
+        const filters = document.querySelectorAll('.status-filter');
+        const tiles = document.querySelectorAll('.room-tile');
+        filters.forEach((f) => {
+            f.addEventListener('click', () => {
+                const s = f.getAttribute('data-status');
+                activeStatus = (activeStatus === s) ? null : s;
+                filters.forEach((x) => x.style.opacity = (activeStatus && x.getAttribute('data-status') !== activeStatus) ? '.4' : '1');
+                tiles.forEach((t) => {
+                    t.style.display = (!activeStatus || t.getAttribute('data-status') === activeStatus) ? '' : 'none';
+                });
+            });
+        });
+    })();
+</script>
+</body>
+</html>

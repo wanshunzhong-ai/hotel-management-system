@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('账单明细')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('bills')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('账单明细', '核对房费与消费，完成收款')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3">
+                <!-- 左侧：账单主体 -->
+                <div class="col-lg-8">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-receipt me-2 text-primary"></i>
+                                <span class="mono" th:text="${bill.billNo}">BL202610100001</span>
+                                <span class="badge-soft ms-2" th:classappend="${bill.status.color}"
+                                      th:text="${bill.status.label}">待结账</span>
+                            </h2>
+                            <div class="d-flex gap-2">
+                                <a th:href="@{/reservations/{id}(id=${bill.reservation.id})}"
+                                   class="btn btn-sm btn-outline-secondary">查看订单</a>
+                                <a th:href="@{/bills}" class="btn btn-sm btn-outline-secondary">返回列表</a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 mb-2">
+                                <div class="col-md-3">
+                                    <div class="text-muted-sm">客户</div>
+                                    <div><strong th:text="${bill.customer.name}">—</strong></div>
+                                    <div class="text-muted-sm mono" th:text="${bill.customer.phone}">—</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-muted-sm">房间</div>
+                                    <div><strong class="mono" th:text="${bill.room.roomNo}">—</strong></div>
+                                    <div class="text-muted-sm" th:text="${bill.room.roomType.name}">—</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-muted-sm">住店区间</div>
+                                    <div th:text="${#temporals.format(bill.reservation.checkInDate,'MM-dd')} + ' → ' + ${#temporals.format(bill.reservation.checkOutDate,'MM-dd')}">—</div>
+                                    <div class="text-muted-sm" th:text="${bill.reservation.nightCount} + ' 晚 × ￥' + ${bill.reservation.unitPrice}">—</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-muted-sm">退房时间</div>
+                                    <div th:text="${bill.reservation.checkOutTime == null ? '—' : #temporals.format(bill.reservation.checkOutTime,'yyyy-MM-dd HH:mm')}">—</div>
+                                    <div class="text-muted-sm" th:text="'操作人 ' + ${bill.operator}">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 消费明细 -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h2><i class="bi bi-bag-plus me-2 text-primary"></i>消费明细</h2>
+                            <span class="text-muted-sm" th:if="${bill.status.name() == 'UNPAID'}">可继续追加消费项目</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="table">
+                                <thead>
+                                <tr>
+                                    <th>项目名称</th>
+                                    <th class="text-end" style="width:110px">单价</th>
+                                    <th class="text-center" style="width:80px">数量</th>
+                                    <th class="text-end" style="width:110px">金额</th>
+                                    <th>备注</th>
+                                    <th style="width:70px" class="text-end"
+                                        th:if="${bill.status.name() == 'UNPAID'}">操作</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td><b>客房房费</b></td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.reservation.unitPrice, 1, 'COMMA', 2, 'POINT')}">—</td>
+                                    <td class="text-center" th:text="${bill.reservation.nightCount} + ' 晚'">—</td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td class="text-muted-sm"
+                                        th:text="${#temporals.format(bill.reservation.checkInDate,'yyyy-MM-dd')} + ' 至 ' + ${#temporals.format(bill.reservation.checkOutDate,'yyyy-MM-dd')}">—</td>
+                                    <td th:if="${bill.status.name() == 'UNPAID'}"></td>
+                                </tr>
+                                <tr th:each="it : ${bill.items}">
+                                    <td th:text="${it.itemName}">迷你吧饮品</td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(it.unitPrice, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td class="text-center" th:text="${it.quantity}">1</td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(it.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td class="text-muted-sm" th:text="${it.remark} ?: '—'">—</td>
+                                    <td class="text-end" th:if="${bill.status.name() == 'UNPAID'}">
+                                        <form th:action="@{/bills/{id}/items/{itemId}/delete(id=${bill.id}, itemId=${it.id})}"
+                                              method="post" data-confirm="确认删除该消费项目？">
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(bill.items)}">
+                                    <td colspan="6" class="text-center text-muted-sm py-3">暂无其他消费</td>
+                                </tr>
+                                </tbody>
+                                <tfoot>
+                                <tr style="background:#f8fafc">
+                                    <td colspan="3" class="text-end"><b>房费</b></td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                <tr style="background:#f8fafc">
+                                    <td colspan="3" class="text-end"><b>其他消费</b></td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.otherAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                <tr style="background:#eef4ff">
+                                    <td colspan="3" class="text-end"><b>应收合计</b></td>
+                                    <td class="text-end money fw-bold"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- 追加消费 -->
+                        <div class="card-body border-top" th:if="${bill.status.name() == 'UNPAID'}">
+                            <form th:action="@{/bills/{id}/items(id=${bill.id})}" method="post" class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label">消费项目</label>
+                                    <input type="text" class="form-control form-control-sm" name="itemName"
+                                           placeholder="如：迷你吧饮品 / 洗衣服务" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">单价</label>
+                                    <input type="number" step="0.01" min="0" class="form-control form-control-sm"
+                                           name="unitPrice" value="0">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">数量</label>
+                                    <input type="number" min="1" class="form-control form-control-sm"
+                                           name="quantity" value="1">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">备注</label>
+                                    <input type="text" class="form-control form-control-sm" name="remark">
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                                        <i class="bi bi-plus-lg me-1"></i>添加
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：结算 -->
+                <div class="col-lg-4">
+                    <div class="card mb-3" th:if="${bill.status.name() == 'UNPAID'}">
+                        <div class="card-header"><h2><i class="bi bi-cash-coin me-2 text-primary"></i>结账收款</h2></div>
+                        <div class="card-body">
+                            <form th:action="@{/bills/{id}/settle(id=${bill.id})}" method="post"
+                                  sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                <div class="mb-3">
+                                    <label class="form-label" for="deposit">已收押金（元）</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" id="deposit"
+                                           name="deposit" value="0.00" oninput="recalc()">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="paidAmount">本次收款（元）</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" id="paidAmount"
+                                           name="paidAmount" th:value="${suggestedPaid}" oninput="recalc()">
+                                    <div class="text-muted-sm mt-1">默认 = 应收合计 − 押金</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label required" for="payMethod">支付方式</label>
+                                    <select class="form-select" id="payMethod" name="payMethod" required>
+                                        <option value="">请选择</option>
+                                        <option th:each="p : ${payMethods}" th:value="${p}" th:text="${p.label}"></option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="remark">收款备注</label>
+                                    <input type="text" class="form-control" id="remark" name="remark">
+                                </div>
+
+                                <div class="p-3" style="background:#f8fafc;border-radius:11px">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted-sm">应收合计</span>
+                                        <span class="money" id="sTotal"
+                                              th:attr="data-total=${bill.totalAmount}"
+                                              th:text="'￥' + ${#numbers.formatDecimal(bill.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted-sm">押金 + 收款</span>
+                                        <span class="money" id="sPaid">￥0.00</span>
+                                    </div>
+                                    <div class="divider my-2"></div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted-sm">应退客人</span>
+                                        <span class="money" id="sRefund" style="color:#0f9d58">￥0.00</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span class="text-muted-sm">客人仍欠</span>
+                                        <span class="money" id="sOwe" style="color:#d63341">￥0.00</span>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-100 mt-3">
+                                    <i class="bi bi-check2-circle me-1"></i>确认结账
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card" th:if="${bill.status.name() != 'UNPAID'}">
+                        <div class="card-header"><h2><i class="bi bi-patch-check me-2 text-success"></i>收款记录</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <div class="d-flex justify-content-between"><span>押金</span>
+                                <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.deposit, 1, 'COMMA', 2, 'POINT')}">—</b></div>
+                            <div class="d-flex justify-content-between"><span>实收金额</span>
+                                <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.paidAmount, 1, 'COMMA', 2, 'POINT')}">—</b></div>
+                            <div class="d-flex justify-content-between"><span>找零 / 应退</span>
+                                <b class="money" th:text="'￥' + ${#numbers.formatDecimal(bill.refundAmount, 1, 'COMMA', 2, 'POINT')}">—</b></div>
+                            <div class="d-flex justify-content-between"><span>支付方式</span>
+                                <span th:text="${bill.payMethod == null ? '—' : bill.payMethod.label}">—</span></div>
+                            <div class="d-flex justify-content-between"><span>结账时间</span>
+                                <span th:text="${bill.settledAt == null ? '—' : #temporals.format(bill.settledAt,'yyyy-MM-dd HH:mm')}">—</span></div>
+                            <div class="d-flex justify-content-between"><span>操作人</span>
+                                <span th:text="${bill.operator} ?: '—'">—</span></div>
+                            <div th:if="${bill.remark}" class="mt-2">备注：<span th:text="${bill.remark}"></span></div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>结算说明</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2">应收合计 = 房费 + 其他消费。</p>
+                            <p class="mb-2">应退 = 押金 + 本次收款 − 应收合计，为正表示需退给客人。</p>
+                            <p class="mb-0">结账后账单将锁定，不能再增删消费项目。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+
+<script>
+    function recalc() {
+        const totalEl = document.getElementById('sTotal');
+        if (!totalEl) return;
+        const total = Number(totalEl.getAttribute('data-total') || 0);
+        const deposit = Number(document.getElementById('deposit').value || 0);
+        const paid = Number(document.getElementById('paidAmount').value || 0);
+        const diff = deposit + paid - total;
+        document.getElementById('sPaid').textContent = window.formatMoney(deposit + paid);
+        document.getElementById('sRefund').textContent = window.formatMoney(Math.max(diff, 0));
+        document.getElementById('sOwe').textContent = window.formatMoney(Math.max(-diff, 0));
+    }
+    document.addEventListener('DOMContentLoaded', recalc);
+</script>
+</body>
+</html>

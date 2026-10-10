@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('账号权限')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('users')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('账号权限', '员工账号与角色分配')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/users}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="账号 / 姓名" style="width:220px">
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/users}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-shield-lock me-2 text-primary"></i>账号列表
+                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(users)} + ' 个'">共 0 个</span>
+                    </h2>
+                    <a th:href="@{/users/new}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-person-plus me-1"></i>新增账号
+                    </a>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:60px">#</th>
+                            <th>登录账号</th>
+                            <th>姓名</th>
+                            <th>角色</th>
+                            <th>手机号</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th style="width:250px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="u : ${users}">
+                            <td class="text-muted" th:text="${u.id}">1</td>
+                            <td><b class="mono" th:text="${u.username}">admin</b></td>
+                            <td th:text="${u.realName}">—</td>
+                            <td>
+                                <span class="badge-soft"
+                                      th:classappend="${u.role.name() == 'ADMIN' ? 'danger' : (u.role.name() == 'RECEPTION' ? 'primary' : 'info')}"
+                                      th:text="${u.role.label}">管理员</span>
+                            </td>
+                            <td class="mono text-muted-sm" th:text="${u.phone} ?: '—'">—</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${u.enabled} ? 'success' : 'secondary'"
+                                      th:text="${u.enabled} ? '已启用' : '已停用'">已启用</span>
+                            </td>
+                            <td class="text-muted-sm"
+                                th:text="${u.createdAt == null ? '—' : #temporals.format(u.createdAt,'yyyy-MM-dd HH:mm')}">—</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        th:attr="data-bs-toggle='modal', data-bs-target='#pwdModal' + ${u.id}">
+                                    <i class="bi bi-key"></i> 重置密码
+                                </button>
+                                <a th:href="@{/users/{id}/edit(id=${u.id})}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/users/{id}/delete(id=${u.id})}" method="post" class="d-inline"
+                                      data-confirm="确定删除该账号吗？">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+
+                                <!-- 重置密码弹窗 -->
+                                <div class="modal fade text-start" th:id="'pwdModal' + ${u.id}" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-content" style="border-radius:14px;border:none">
+                                            <form th:action="@{/users/{id}/reset-password(id=${u.id})}" method="post">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">
+                                                        重置密码 · <span th:text="${u.username}">admin</span>
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <label class="form-label required">新密码（至少 6 位）</label>
+                                                    <input type="text" class="form-control" name="rawPassword"
+                                                           minlength="6" required>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-outline-secondary"
+                                                            data-bs-dismiss="modal">取消</button>
+                                                    <button type="submit" class="btn btn-primary">确认重置</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(users)}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-shield-lock"></i>没有匹配的账号</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header"><h2><i class="bi bi-diagram-3 me-2 text-primary"></i>角色权限说明</h2></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 h-100" style="background:#fdeaea;border-radius:11px">
+                                <div class="fw-bold mb-1" style="color:#b02a37">管理员</div>
+                                <div class="text-muted-sm" style="line-height:1.9">
+                                    全部功能：预订、结账、客户、房型、客房、账号权限管理
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 h-100" style="background:#e8efff;border-radius:11px">
+                                <div class="fw-bold mb-1" style="color:#1d4ed8">前台接待</div>
+                                <div class="text-muted-sm" style="line-height:1.9">
+                                    预订、入住、退房、账单结算、客户档案、房态与房型维护
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 h-100" style="background:#e6f4fb;border-radius:11px">
+                                <div class="fw-bold mb-1" style="color:#0a5d8c">客房服务</div>
+                                <div class="text-muted-sm" style="line-height:1.9">
+                                    房态查看与维护、确认清洁完成，不能访问客户与账单数据
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

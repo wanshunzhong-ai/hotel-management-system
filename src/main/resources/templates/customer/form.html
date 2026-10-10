@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('客户建档')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('customers')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客户建档', '登记住客身份信息与联系方式')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-person-vcard me-2 text-primary"></i>
+                                <span th:text="${customer.id == null} ? '新增客户' : '编辑客户'">新增客户</span>
+                            </h2>
+                            <a th:href="@{/customers}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回列表
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/customers/save}" th:object="${customer}" method="post">
+                                <input type="hidden" th:field="*{id}">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="name">姓名</label>
+                                        <input type="text" class="form-control" id="name" th:field="*{name}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="gender">性别</label>
+                                        <select class="form-select" id="gender" th:field="*{gender}">
+                                            <option th:each="g : ${genders}" th:value="${g}" th:text="${g.label}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="memberLevel">会员等级</label>
+                                        <select class="form-select" id="memberLevel" th:field="*{memberLevel}">
+                                            <option value="普通">普通</option>
+                                            <option value="银卡">银卡</option>
+                                            <option value="金卡">金卡</option>
+                                            <option value="钻石">钻石</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="idType">证件类型</label>
+                                        <select class="form-select" id="idType" th:field="*{idType}">
+                                            <option th:each="t : ${idTypes}" th:value="${t}" th:text="${t.label}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label required" for="idNo">证件号码</label>
+                                        <input type="text" class="form-control" id="idNo" th:field="*{idNo}"
+                                               placeholder="18 位身份证号 / 护照号">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('idNo')}" th:errors="*{idNo}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="phone">手机号</label>
+                                        <input type="text" class="form-control" id="phone" th:field="*{phone}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('phone')}" th:errors="*{phone}"></div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label" for="email">电子邮箱</label>
+                                        <input type="text" class="form-control" id="email" th:field="*{email}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="address">联系地址</label>
+                                        <input type="text" class="form-control" id="address" th:field="*{address}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="remark">备注</label>
+                                        <textarea class="form-control" id="remark" th:field="*{remark}" rows="2"
+                                                  placeholder="偏好房型、注意事项等"></textarea>
+                                    </div>
+                                </div>
+                                <div class="divider"></div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存客户
+                                </button>
+                                <a th:href="@{/customers}" class="btn btn-outline-secondary ms-2">取消</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="bi bi-shield-check me-2 text-primary"></i>信息规范</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2"><b>证件号唯一</b>：同一位客人的证件号只能建档一次，便于历史入住记录归集。</p>
+                            <p class="mb-2"><b>手机号格式</b>：需为 11 位中国大陆手机号。</p>
+                            <p class="mb-0"><b>隐私保护</b>：列表页证件号自动脱敏展示，仅保留前 3 位与后 4 位。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

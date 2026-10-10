@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('预订登记')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('reservations')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('预订登记', '选择客户与日期，系统自动筛出可预订房间')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-calendar-plus me-2 text-primary"></i>
+                                <span th:text="${form.id == null} ? '新建预订' : '修改预订'">新建预订</span>
+                            </h2>
+                            <a th:href="@{/reservations}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回列表
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/reservations/save}" th:object="${form}" method="post" id="reservationForm">
+                                <input type="hidden" th:field="*{id}">
+                                <input type="hidden" id="currentRoomId" th:value="${form.roomId}">
+
+                                <div class="row g-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label required" for="customerId">客户</label>
+                                        <div class="input-group">
+                                            <select class="form-select" id="customerId" th:field="*{customerId}">
+                                                <option value="">请选择客户</option>
+                                                <option th:each="c : ${customers}" th:value="${c.id}"
+                                                        th:text="${c.name} + ' · ' + ${c.phone} + ' · ' + ${c.memberLevel}"></option>
+                                            </select>
+                                            <a th:href="@{/customers/new}" class="btn btn-outline-secondary"
+                                               title="新建客户档案"><i class="bi bi-person-plus"></i></a>
+                                        </div>
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('customerId')}" th:errors="*{customerId}"></div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="checkInDate">入住日期</label>
+                                        <input type="date" class="form-control" id="checkInDate" th:field="*{checkInDate}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('checkInDate')}" th:errors="*{checkInDate}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="checkOutDate">离店日期</label>
+                                        <input type="date" class="form-control" id="checkOutDate" th:field="*{checkOutDate}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></div>
+                                    </div>
+
+                                    <div class="col-md-8">
+                                        <label class="form-label required" for="roomId">房间</label>
+                                        <select class="form-select" id="roomId" th:field="*{roomId}">
+                                            <option value="">请先选择入住与离店日期</option>
+                                        </select>
+                                        <div class="text-muted-sm mt-1" id="roomHint">
+                                            <i class="bi bi-info-circle me-1"></i>系统会自动排除该时间段已被预订或维修中的房间
+                                        </div>
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('roomId')}" th:errors="*{roomId}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="guestCount">入住人数</label>
+                                        <input type="number" class="form-control" id="guestCount" th:field="*{guestCount}" min="1">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('guestCount')}" th:errors="*{guestCount}"></div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="remark">备注</label>
+                                        <textarea class="form-control" id="remark" th:field="*{remark}" rows="2"
+                                                  placeholder="到店时间、特殊要求等"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-info mt-3" id="summaryBox" style="display:none">
+                                    <i class="bi bi-calculator"></i>
+                                    <span id="summaryText"></span>
+                                </div>
+
+                                <div class="divider"></div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存订单
+                                </button>
+                                <a th:href="@{/reservations}" class="btn btn-outline-secondary ms-2">取消</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card mb-3">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>预订规则</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2">离店日期必须晚于入住日期，最长可预订 <b>365 晚</b>。</p>
+                            <p class="mb-2">系统按「<b>区间重叠</b>」判定占用，同一房间不会重复卖出。</p>
+                            <p class="mb-2">下单时按房型当前门市价<b>锁定房价</b>，后续调价不影响该订单。</p>
+                            <p class="mb-0">客人到店后，在订单上点击「入住」即可完成登记。</p>
+                        </div>
+                    </div>
+                    <div class="card" th:if="${reservation != null}">
+                        <div class="card-header"><h2><i class="bi bi-clock-history me-2 text-primary"></i>当前订单</h2></div>
+                        <div class="card-body text-muted-sm">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>订单号</span><b class="mono" th:text="${reservation.orderNo}">—</b>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>状态</span>
+                                <span class="badge-soft" th:classappend="${reservation.status.color}"
+                                      th:text="${reservation.status.label}">—</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>原房费</span>
+                                <b class="money" th:text="'￥' + ${#numbers.formatDecimal(reservation.roomAmount, 1, 'COMMA', 2, 'POINT')}">—</b>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+
+<script>
+    (function () {
+        const checkIn = document.getElementById('checkInDate');
+        const checkOut = document.getElementById('checkOutDate');
+        const roomSelect = document.getElementById('roomId');
+        const hint = document.getElementById('roomHint');
+        const guestCount = document.getElementById('guestCount');
+        const summaryBox = document.getElementById('summaryBox');
+        const summaryText = document.getElementById('summaryText');
+        const preservedRoomId = document.getElementById('currentRoomId').value;
+
+        let roomCache = [];
+
+        function nights() {
+            if (!checkIn.value || !checkOut.value) return 0;
+            const a = new Date(checkIn.value), b = new Date(checkOut.value);
+            return Math.round((b - a) / 86400000);
+        }
+
+        function renderRooms(rooms) {
+            roomCache = rooms;
+            const prev = roomSelect.value || preservedRoomId;
+            roomSelect.innerHTML = '<option value="">请选择房间</option>';
+            if (!rooms.length) {
+                const o = document.createElement('option');
+                o.disabled = true;
+                o.textContent = '该时段没有可预订的房间';
+                roomSelect.appendChild(o);
+                hint.innerHTML = '<i class="bi bi-exclamation-circle me-1 text-danger"></i>该时段所有房间均已被占用，请调整日期。';
+                updateSummary();
+                return;
+            }
+            rooms.forEach((r) => {
+                const o = document.createElement('option');
+                o.value = r.id;
+                o.textContent = r.roomNo + ' · ' + r.typeName + ' · ' + r.bedType + ' · ￥' + r.price + '/晚 · 限' + r.capacity + '人';
+                roomSelect.appendChild(o);
+            });
+            // 编辑态保留原房间
+            if (prev && !rooms.some((r) => String(r.id) === String(prev))) {
+                const o = document.createElement('option');
+                o.value = prev;
+                o.textContent = '（当前房间）保持不变';
+                roomSelect.appendChild(o);
+            }
+            if (prev) roomSelect.value = prev;
+            hint.innerHTML = '<i class="bi bi-check-circle me-1 text-success"></i>共筛出 ' + rooms.length + ' 间可预订房间。';
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const n = nights();
+            const r = roomCache.find((x) => String(x.id) === String(roomSelect.value));
+            if (n > 0 && r) {
+                const total = (n * Number(r.price)).toFixed(2);
+                summaryText.innerHTML = '共 <b>' + n + '</b> 晚 × ￥' + r.price + '/晚 ＝ 房费合计 <b>￥' + total + '</b>';
+                summaryBox.style.display = '';
+            } else {
+                summaryBox.style.display = 'none';
+            }
+            if (guestCount && r && Number(guestCount.value) > r.capacity) {
+                guestCount.classList.add('is-invalid');
+            } else if (guestCount) {
+                guestCount.classList.remove('is-invalid');
+            }
+        }
+
+        function loadRooms() {
+            if (!checkIn.value || !checkOut.value) return;
+            if (nights() <= 0) {
+                roomSelect.innerHTML = '<option value="">离店日期需晚于入住日期</option>';
+                return;
+            }
+            fetch('/reservations/available-rooms?checkIn=' + checkIn.value + '&checkOut=' + checkOut.value)
+                .then((res) => res.json())
+                .then(renderRooms)
+                .catch(() => {
+                    hint.innerHTML = '<i class="bi bi-exclamation-triangle me-1 text-danger"></i>房间列表加载失败，请刷新页面重试。';
+                });
+        }
+
+        checkIn.addEventListener('change', loadRooms);
+        checkOut.addEventListener('change', loadRooms);
+        roomSelect.addEventListener('change', updateSummary);
+        if (guestCount) guestCount.addEventListener('input', updateSummary);
+        loadRooms();
+    })();
+</script>
+</body>
+</html>

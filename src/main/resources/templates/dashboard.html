@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('数据看板')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('dashboard')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('数据看板', '今日经营概览与待办事项')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <!-- 核心指标 -->
+            <div class="stat-grid mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-danger"><i class="bi bi-person-fill"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.inHouseCount}">0</div>
+                        <div class="stat-label">在住房间</div>
+                        <div class="stat-hint" th:text="'客房总数 ' + ${stats.totalRooms} + ' 间'">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-success"><i class="bi bi-door-open"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.availableRooms}">0</div>
+                        <div class="stat-label">当前空闲</div>
+                        <div class="stat-hint" th:text="'待清洁 ' + ${stats.cleaningRooms} + ' · 维修 ' + ${stats.maintenanceRooms}">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-primary"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.occupancyRate} + '%'">0%</div>
+                        <div class="stat-label">入住率</div>
+                        <div class="stat-hint" th:text="'已预订 ' + ${stats.reservedRooms} + ' 间'">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-warning"><i class="bi bi-cash-coin"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="'￥' + ${#numbers.formatDecimal(stats.todayRevenue, 1, 'COMMA', 0, 'POINT')}">￥0</div>
+                        <div class="stat-label">今日营收</div>
+                        <div class="stat-hint" th:text="'本月 ' + '￥' + ${#numbers.formatDecimal(stats.monthRevenue, 1, 'COMMA', 0, 'POINT')}">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-grid mb-4">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-info"><i class="bi bi-box-arrow-in-right"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.arrivalsToday}">0</div>
+                        <div class="stat-label">今日预抵</div>
+                        <div class="stat-hint" th:text="'已到店 ' + ${stats.checkedInToday} + ' 单'">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-secondary"><i class="bi bi-box-arrow-right"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.departuresToday}">0</div>
+                        <div class="stat-label">今日预离</div>
+                        <div class="stat-hint">待办理退房</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-warning"><i class="bi bi-receipt-cutoff"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.unsettledBills}">0</div>
+                        <div class="stat-label">未结账单</div>
+                        <div class="stat-hint">需跟进收款</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-primary"><i class="bi bi-people"></i></div>
+                    <div>
+                        <div class="stat-value" th:text="${stats.totalCustomers}">0</div>
+                        <div class="stat-label">客户档案</div>
+                        <div class="stat-hint" th:text="'累计营收 ￥' + ${#numbers.formatDecimal(stats.totalRevenue, 1, 'COMMA', 0, 'POINT')}">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表区 -->
+            <div class="row g-3 mb-4">
+                <div class="col-lg-8">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-bar-chart-line me-2 text-primary"></i>近 7 日营收趋势</h2>
+                            <span class="text-muted-sm">单位：元</span>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="revenueChart" height="112"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-pie-chart me-2 text-primary"></i>房型房量分布</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="roomTypeChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 今日待办 -->
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-box-arrow-in-right me-2 text-success"></i>今日预抵名单</h2>
+                            <a th:href="@{/reservations(status='BOOKED')}" class="btn btn-sm btn-outline-secondary">全部订单</a>
+                        </div>
+                        <div class="card-body pt-2">
+                            <div th:if="${#lists.isEmpty(stats.todayArrivalList)}" class="empty-state py-4">
+                                <i class="bi bi-inbox"></i>今日暂无预抵客人
+                            </div>
+                            <div th:each="r : ${stats.todayArrivalList}" class="timeline-item">
+                                <div class="timeline-dot bg-soft-success"><i class="bi bi-person-check"></i></div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong th:text="${r.customer.name}">客户</strong>
+                                        <span class="badge-soft"
+                                              th:classappend="${r.status.color}"
+                                              th:text="${r.status.label}">状态</span>
+                                    </div>
+                                    <div class="text-muted-sm mt-1">
+                                        <i class="bi bi-door-closed me-1"></i><span th:text="${r.room.roomNo}">房号</span>
+                                        <span class="mx-2">|</span>
+                                        <i class="bi bi-calendar3 me-1"></i>
+                                        <span th:text="${#temporals.format(r.checkInDate,'MM-dd')} + ' → ' + ${#temporals.format(r.checkOutDate,'MM-dd')}">日期</span>
+                                        <span class="mx-2">|</span>
+                                        <span th:text="${r.nightCount} + ' 晚'">晚数</span>
+                                    </div>
+                                </div>
+                                <form th:action="@{/reservations/{id}/checkin(id=${r.id})}" method="post"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button class="btn btn-sm btn-accent" type="submit"
+                                            th:disabled="${!r.checkInAllowed}">办理入住</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-box-arrow-right me-2 text-danger"></i>今日预离名单</h2>
+                            <a th:href="@{/reservations(status='CHECKED_IN')}" class="btn btn-sm btn-outline-secondary">在住订单</a>
+                        </div>
+                        <div class="card-body pt-2">
+                            <div th:if="${#lists.isEmpty(stats.todayDepartureList)}" class="empty-state py-4">
+                                <i class="bi bi-inbox"></i>今日暂无客人退房
+                            </div>
+                            <div th:each="r : ${stats.todayDepartureList}" class="timeline-item">
+                                <div class="timeline-dot bg-soft-danger"><i class="bi bi-box-arrow-right"></i></div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong th:text="${r.customer.name}">客户</strong>
+                                        <span class="money text-danger"
+                                              th:text="'￥' + ${#numbers.formatDecimal(r.roomAmount, 1, 'COMMA', 0, 'POINT')}">￥0</span>
+                                    </div>
+                                    <div class="text-muted-sm mt-1">
+                                        <i class="bi bi-door-closed me-1"></i><span th:text="${r.room.roomNo}">房号</span>
+                                        <span class="mx-2">|</span>
+                                        <span th:text="'入住 ' + ${#temporals.format(r.checkInTime,'MM-dd HH:mm')}">入住时间</span>
+                                        <span class="mx-2">|</span>
+                                        <span th:text="${r.nightCount} + ' 晚 · ' + ${r.guestCount} + ' 人'">—</span>
+                                    </div>
+                                </div>
+                                <form th:action="@{/reservations/{id}/checkout(id=${r.id})}" method="post"
+                                      data-confirm="确认为该客人办理退房并生成账单？"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button class="btn btn-sm btn-primary" type="submit">办理退房</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 房态分布 -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>房态分布</h2>
+                    <a th:href="@{/rooms/board}" class="btn btn-sm btn-outline-secondary">查看房态图</a>
+                </div>
+                <div class="card-body">
+                    <div class="progress" style="height:12px;border-radius:999px;background:#eef1f6">
+                        <div class="progress-bar bg-danger" role="progressbar"
+                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.occupiedRooms * 100 / stats.totalRooms} + '%'"></div>
+                        <div class="progress-bar" role="progressbar"
+                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.reservedRooms * 100 / stats.totalRooms} + '%;background:#0d7fbf'"></div>
+                        <div class="progress-bar" role="progressbar"
+                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.cleaningRooms * 100 / stats.totalRooms} + '%;background:#d99e08'"></div>
+                        <div class="progress-bar" role="progressbar"
+                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.maintenanceRooms * 100 / stats.totalRooms} + '%;background:#8394ab'"></div>
+                        <div class="progress-bar bg-success" role="progressbar"
+                             th:style="'width:' + ${stats.totalRooms == 0 ? 0 : stats.availableRooms * 100 / stats.totalRooms} + '%'"></div>
+                    </div>
+                    <div class="legend mt-3">
+                        <span><i class="dot" style="background:#dc3545"></i>已入住 <b th:text="${stats.occupiedRooms}">0</b></span>
+                        <span><i class="dot" style="background:#0d7fbf"></i>已预订 <b th:text="${stats.reservedRooms}">0</b></span>
+                        <span><i class="dot" style="background:#d99e08"></i>待清洁 <b th:text="${stats.cleaningRooms}">0</b></span>
+                        <span><i class="dot" style="background:#8394ab"></i>维修中 <b th:text="${stats.maintenanceRooms}">0</b></span>
+                        <span><i class="dot" style="background:#0f9d58"></i>空闲 <b th:text="${stats.availableRooms}">0</b></span>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const revenueLabels = /*[[${stats.revenueLabels}]]*/ [];
+    const revenueValues = /*[[${stats.revenueValues}]]*/ [];
+    const typeLabels = /*[[${stats.roomTypeLabels}]]*/ [];
+    const typeValues = /*[[${stats.roomTypeValues}]]*/ [];
+    /*]]>*/
+
+    const ctx1 = document.getElementById('revenueChart');
+    if (ctx1) {
+        const grad = ctx1.getContext('2d').createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, 'rgba(37,99,235,.85)');
+        grad.addColorStop(1, 'rgba(37,99,235,.35)');
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: revenueLabels,
+                datasets: [{
+                    label: '营收',
+                    data: revenueValues,
+                    backgroundColor: grad,
+                    borderRadius: 7,
+                    maxBarThickness: 38
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => ' 营收 ' + window.formatMoney(c.parsed.y)
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#eef1f6' },
+                        ticks: { callback: (v) => '￥' + v }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    const ctx2 = document.getElementById('roomTypeChart');
+    if (ctx2) {
+        new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: typeLabels,
+                datasets: [{
+                    data: typeValues,
+                    backgroundColor: ['#2563eb', '#0d7fbf', '#c9a227', '#0f9d58', '#d63341', '#8394ab'],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => ' ' + c.label + '：' + c.parsed + ' 间'
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>

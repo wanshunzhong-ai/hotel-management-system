@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('账号编辑')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('users')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('账号编辑', '维护员工账号与角色')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-shield-lock me-2 text-primary"></i>
+                                <span th:text="${user.id == null} ? '新增账号' : '编辑账号'">新增账号</span>
+                            </h2>
+                            <a th:href="@{/users}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回列表
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/users/save}" th:object="${user}" method="post" autocomplete="off">
+                                <input type="hidden" th:field="*{id}">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="username">登录账号</label>
+                                        <input type="text" class="form-control" id="username" th:field="*{username}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('username')}" th:errors="*{username}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="realName">姓名</label>
+                                        <input type="text" class="form-control" id="realName" th:field="*{realName}">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('realName')}" th:errors="*{realName}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="role">角色</label>
+                                        <select class="form-select" id="role" th:field="*{role}">
+                                            <option th:each="r : ${roles}" th:value="${r}"
+                                                    th:text="${r.label} + ' · ' + ${r.description}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="phone">手机号</label>
+                                        <input type="text" class="form-control" id="phone" th:field="*{phone}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="rawPassword"
+                                               th:text="${user.id == null} ? '初始密码（至少 6 位）' : '新密码（留空表示不修改）'">密码</label>
+                                        <input type="text" class="form-control" id="rawPassword" name="rawPassword"
+                                               placeholder="至少 6 位" th:attr="required=${user.id == null}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="remark">备注</label>
+                                        <input type="text" class="form-control" id="remark" th:field="*{remark}">
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enabled"
+                                                   th:field="*{enabled}">
+                                            <label class="form-check-label" for="enabled">启用该账号</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="divider"></div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存账号
+                                </button>
+                                <a th:href="@{/users}" class="btn btn-outline-secondary ms-2">取消</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>注意事项</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2"><b>登录账号</b>需全局唯一，建议使用英文名或工号。</p>
+                            <p class="mb-2"><b>密码</b>以 BCrypt 加密存储，任何页面都不会回显明文。</p>
+                            <p class="mb-2">系统<b>必须保留至少一个启用的管理员</b>，否则无法再进入权限管理。</p>
+                            <p class="mb-0">不能删除当前登录中的账号。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('房型设置')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('room-types')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房型设置', '维护房型、床型与门市价')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row">
+                <div class="col-lg-8 col-xl-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-layers me-2 text-primary"></i>
+                                <span th:text="${roomType.id == null} ? '新增房型' : '编辑房型'">新增房型</span>
+                            </h2>
+                            <a th:href="@{/room-types}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回列表
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/room-types/save}" th:object="${roomType}" method="post">
+                                <input type="hidden" th:field="*{id}">
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="name">房型名称</label>
+                                        <input type="text" class="form-control" id="name" th:field="*{name}"
+                                               placeholder="例如：商务大床房">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="bedType">床型</label>
+                                        <input type="text" class="form-control" id="bedType" th:field="*{bedType}"
+                                               placeholder="例如：1.8m 大床">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('bedType')}" th:errors="*{bedType}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="area">面积（㎡）</label>
+                                        <input type="number" class="form-control" id="area" th:field="*{area}" min="1">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('area')}" th:errors="*{area}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="capacity">可住人数</label>
+                                        <input type="number" class="form-control" id="capacity" th:field="*{capacity}" min="1">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('capacity')}" th:errors="*{capacity}"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="price">门市价（元/晚）</label>
+                                        <input type="number" step="0.01" class="form-control" id="price"
+                                               th:field="*{price}" min="0.01">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('price')}" th:errors="*{price}"></div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="description">房型说明</label>
+                                        <textarea class="form-control" id="description" th:field="*{description}"
+                                                  rows="3" placeholder="朝向、配套、是否含早等"></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="enabled"
+                                                   th:field="*{enabled}">
+                                            <label class="form-check-label" for="enabled">
+                                                启用该房型（停用后不可为新房间选择该房型）
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="divider"></div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存房型
+                                </button>
+                                <a th:href="@{/room-types}" class="btn btn-outline-secondary ms-2">取消</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-xl-5">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>填写提示</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2"><b>房型名称</b>：客人可见的名称，例如「商务大床房」，需唯一。</p>
+                            <p class="mb-2"><b>门市价</b>：预订时按此价格锁定房价，后续调价不影响已有订单。</p>
+                            <p class="mb-2"><b>可住人数</b>：预订时校验，超出会拒绝下单。</p>
+                            <p class="mb-0"><b>停用</b>：仅影响新建房间时的可选范围，已存在的房间不受影响。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

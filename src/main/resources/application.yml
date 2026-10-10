@@ -1,0 +1,60 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: hotel-management-system
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/hotel_management?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: "123456"
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      pool-name: HotelHikariPool
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: Asia/Shanghai
+
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    mode: HTML
+
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+# 业务参数
+hotel:
+  name: 云栖大酒店
+  # 预订最多可提前天数
+  max-advance-days: 365
+  # 初始化演示数据
+  init-demo-data: true
+
+logging:
+  level:
+    root: INFO
+    com.hotel.hms: INFO
+    org.hibernate.SQL: WARN

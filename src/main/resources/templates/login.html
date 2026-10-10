@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="'登录 · ' + ${hotelName} + '管理系统'">登录</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏨</text></svg>">
+    <link rel="stylesheet" th:href="@{/vendor/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/vendor/bootstrap-icons.min.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="login-page">
+
+    <!-- 左侧品牌区 -->
+    <section class="login-hero">
+        <div>
+            <div class="hero-badge">
+                <i class="bi bi-buildings"></i>
+                <span th:text="${hotelName} + ' · 一体化酒店管理平台'">云栖大酒店</span>
+            </div>
+            <h1>一间房的全生命周期<br>都在这里完成</h1>
+            <p class="lead">
+                从房态总览、在线预订、入住登记，到消费记账与退房结算，
+                前台、客房、管理三层角色各司其职，数据实时同源。
+            </p>
+            <div class="hero-points">
+                <div class="hero-point"><i class="bi bi-check-circle-fill"></i><span>实时房态看板：空闲 / 已预订 / 在住 / 待清洁 / 维修 一览无遗</span></div>
+                <div class="hero-point"><i class="bi bi-check-circle-fill"></i><span>预订日期冲突自动校验，避免重复卖出同一间房</span></div>
+                <div class="hero-point"><i class="bi bi-check-circle-fill"></i><span>退房自动生成账单，押金、消费明细、找零一键结清</span></div>
+            </div>
+        </div>
+        <div style="position:relative;z-index:1">
+            <div class="text-muted-sm" style="color:#7e8ea8">
+                <i class="bi bi-c-circle me-1"></i>
+                <span th:text="|© ${#temporals.format(today,'yyyy')} ${hotelName} · Spring Boot 3 技术栈|"></span>
+            </div>
+        </div>
+    </section>
+
+    <!-- 右侧登录表单 -->
+    <section class="login-panel">
+        <div class="login-card">
+            <h2>欢迎回来 👋</h2>
+            <p class="sub">请使用员工账号登录管理系统</p>
+
+            <div class="alert alert-danger" th:if="${loginError}">
+                <i class="bi bi-exclamation-triangle-fill"></i><span>账号或密码错误，请重新输入</span>
+            </div>
+            <div class="alert alert-success" th:if="${logout}">
+                <i class="bi bi-check-circle-fill"></i><span>您已安全退出登录</span>
+            </div>
+            <div class="alert alert-info" th:if="${expired}">
+                <i class="bi bi-info-circle-fill"></i><span>登录状态已过期，请重新登录</span>
+            </div>
+            <div class="alert alert-info" th:if="${param.denied}">
+                <i class="bi bi-shield-exclamation"></i><span>当前角色无权访问该功能</span>
+            </div>
+
+            <form th:action="@{/login}" method="post" autocomplete="off">
+                <div class="mb-3">
+                    <label class="form-label" for="username">登录账号</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white" style="border-radius:9px 0 0 9px;border-color:#dbe1ec">
+                            <i class="bi bi-person text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control" id="username" name="username"
+                               style="border-radius:0 9px 9px 0" placeholder="请输入账号" required autofocus>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label" for="password">登录密码</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white" style="border-radius:9px 0 0 9px;border-color:#dbe1ec">
+                            <i class="bi bi-lock text-muted"></i>
+                        </span>
+                        <input type="password" class="form-control" id="password" name="password"
+                               style="border-radius:0 9px 9px 0" placeholder="请输入密码" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100" style="padding:10px;font-weight:600">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> 登 录
+                </button>
+            </form>
+
+            <div class="demo-accounts">
+                <div class="title"><i class="bi bi-lightbulb me-1"></i>演示账号（点击自动填充）</div>
+                <span class="demo-chip" data-username="admin" data-password="admin123">
+                    <i class="bi bi-shield-lock"></i>管理员 admin / admin123
+                </span>
+                <span class="demo-chip" data-username="reception" data-password="123456">
+                    <i class="bi bi-person-badge"></i>前台 reception / 123456
+                </span>
+                <span class="demo-chip" data-username="housekeeping" data-password="123456">
+                    <i class="bi bi-stars"></i>客房 housekeeping / 123456
+                </span>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script th:src="@{/vendor/bootstrap.bundle.min.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

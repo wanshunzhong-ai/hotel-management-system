@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>无权访问 · 酒店管理系统</title>
+    <link rel="stylesheet" th:href="@{/vendor/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/vendor/bootstrap-icons.min.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="d-flex align-items-center justify-content-center" style="min-height:100vh">
+    <div class="card" style="max-width:540px;width:100%">
+        <div class="card-body text-center p-5">
+            <div class="stat-icon bg-soft-warning mx-auto mb-3" style="width:62px;height:62px;font-size:27px">
+                <i class="bi bi-shield-exclamation"></i>
+            </div>
+            <h1 style="font-size:21px;font-weight:700">403 · 无权访问该功能</h1>
+            <p class="text-muted-sm mt-3 mb-4" style="line-height:1.9">
+                当前登录角色
+                <b sec:authentication="principal.role.label">角色</b>
+                没有访问该模块的权限。如确需使用，请联系管理员调整账号角色。
+            </p>
+            <div class="d-flex gap-2 justify-content-center">
+                <a th:href="@{/dashboard}" class="btn btn-primary">
+                    <i class="bi bi-speedometer2 me-1"></i>返回数据看板
+                </a>
+                <a th:href="@{/profile}" class="btn btn-outline-secondary">查看我的角色</a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

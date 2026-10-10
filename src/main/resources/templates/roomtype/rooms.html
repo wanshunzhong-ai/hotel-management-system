@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('房型房间')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('room-types')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房型房间', '该房型下的全部客房')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-door-closed me-2 text-primary"></i>
+                        <span th:text="${roomType.name} + ' · 房间列表'">房型</span>
+                    </h2>
+                    <a th:href="@{/room-types}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>返回房型
+                    </a>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>房号</th>
+                            <th>楼层</th>
+                            <th>房态</th>
+                            <th>备注</th>
+                            <th class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${rooms}">
+                            <td><strong th:text="${r.roomNo}">201</strong></td>
+                            <td th:text="${r.floor} + ' 层'">2 层</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${r.status.color}">
+                                    <i th:class="'bi ' + ${r.status.icon}"></i>
+                                    <span th:text="${r.status.label}">空闲</span>
+                                </span>
+                            </td>
+                            <td class="text-muted-sm" th:text="${r.remark} ?: '—'">—</td>
+                            <td class="text-end">
+                                <a th:href="@{/rooms/{id}/edit(id=${r.id})}" class="btn btn-sm btn-outline-secondary">编辑</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(rooms)}">
+                            <td colspan="5">
+                                <div class="empty-state"><i class="bi bi-door-closed"></i>该房型下暂无房间</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

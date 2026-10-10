@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('客房编辑')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('rooms')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客房编辑', '维护房号、楼层与房型归属')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-door-closed me-2 text-primary"></i>
+                                <span th:text="${room.id == null} ? '新增客房' : '编辑客房'">新增客房</span>
+                            </h2>
+                            <a th:href="@{/rooms}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回列表
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/rooms/save}" th:object="${room}" method="post">
+                                <input type="hidden" th:field="*{id}">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="roomNo">房号</label>
+                                        <input type="text" class="form-control" id="roomNo" th:field="*{roomNo}"
+                                               placeholder="例如：8801">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('roomNo')}" th:errors="*{roomNo}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="floor">楼层</label>
+                                        <input type="number" class="form-control" id="floor" th:field="*{floor}" min="1">
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('floor')}" th:errors="*{floor}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="roomType">房型</label>
+                                        <select class="form-select" id="roomType" th:field="*{roomType.id}">
+                                            <option value="">请选择房型</option>
+                                            <option th:each="t : ${types}" th:value="${t.id}"
+                                                    th:text="${t.name} + '（￥' + ${t.price} + '/晚）'"></option>
+                                        </select>
+                                        <div class="text-danger mt-1" style="font-size:12px"
+                                             th:if="${#fields.hasErrors('roomType')}" th:errors="*{roomType}"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="status">房态</label>
+                                        <select class="form-select" id="status" th:field="*{status}">
+                                            <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="remark">备注</label>
+                                        <input type="text" class="form-control" id="remark" th:field="*{remark}"
+                                               placeholder="朝向、特殊设施等">
+                                    </div>
+                                </div>
+                                <div class="divider"></div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>保存客房
+                                </button>
+                                <a th:href="@{/rooms}" class="btn btn-outline-secondary ms-2">取消</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>提示</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2">房号需全酒店唯一，建议按「楼层 + 序号」命名，例如 3 楼第 1 间 → <b>301</b>。</p>
+                            <p class="mb-2">若该房间存在进行中的订单（已预订 / 在住），系统会拒绝直接修改房态。</p>
+                            <p class="mb-0">日常房态调整请在「房态一览」或列表中快捷切换。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

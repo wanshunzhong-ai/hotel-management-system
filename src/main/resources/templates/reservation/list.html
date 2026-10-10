@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('预订管理')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('reservations')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('预订管理', '预订、改单、取消、入住与退房')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/reservations}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="订单号 / 客户姓名 / 手机号 / 房号" style="width:250px">
+                        </div>
+                        <div>
+                            <label class="form-label">订单状态</label>
+                            <select class="form-select" name="status" style="width:150px">
+                                <option value="">全部状态</option>
+                                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                        th:selected="${status != null && status == s}"></option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/reservations}" class="btn btn-outline-secondary">重置</a>
+                        <a th:href="@{/reservations/new}" class="btn btn-accent ms-auto">
+                            <i class="bi bi-calendar-plus me-1"></i>新建预订
+                        </a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-journal-text me-2 text-primary"></i>预订单
+                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(reservations)} + ' 单'">共 0 单</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:140px">订单号</th>
+                            <th>客户</th>
+                            <th style="width:130px">房间</th>
+                            <th style="width:190px">入住 → 离店</th>
+                            <th class="text-center" style="width:70px">晚数</th>
+                            <th class="text-end" style="width:100px">房费</th>
+                            <th style="width:100px">状态</th>
+                            <th style="width:250px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${reservations}">
+                            <td>
+                                <a th:href="@{/reservations/{id}(id=${r.id})}" class="mono"
+                                   th:text="${r.orderNo}">RS202610100001</a>
+                            </td>
+                            <td>
+                                <strong th:text="${r.customer.name}">张伟</strong>
+                                <div class="text-muted-sm mono" th:text="${r.customer.phone}">13800000000</div>
+                            </td>
+                            <td>
+                                <span class="mono" th:text="${r.room.roomNo}">201</span>
+                                <div class="text-muted-sm" th:text="${r.room.roomType.name}">标准大床房</div>
+                            </td>
+                            <td class="text-muted-sm">
+                                <span th:text="${#temporals.format(r.checkInDate,'yyyy-MM-dd')}">—</span>
+                                <i class="bi bi-arrow-right mx-1"></i>
+                                <span th:text="${#temporals.format(r.checkOutDate,'yyyy-MM-dd')}">—</span>
+                            </td>
+                            <td class="text-center" th:text="${r.nightCount}">1</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(r.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥268.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${r.status.color}"
+                                      th:text="${r.status.label}">已预订</span>
+                            </td>
+                            <td class="text-end">
+                                <form th:if="${r.checkInAllowed}" th:action="@{/reservations/{id}/checkin(id=${r.id})}"
+                                      method="post" class="d-inline"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button type="submit" class="btn btn-sm btn-accent">入住</button>
+                                </form>
+                                <form th:if="${r.checkOutAllowed}" th:action="@{/reservations/{id}/checkout(id=${r.id})}"
+                                      method="post" class="d-inline" data-confirm="确认退房并生成账单？"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button type="submit" class="btn btn-sm btn-primary">退房</button>
+                                </form>
+                                <a th:if="${r.status.name() == 'BOOKED'}"
+                                   th:href="@{/reservations/{id}/edit(id=${r.id})}"
+                                   class="btn btn-sm btn-outline-secondary"
+                                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')">改单</a>
+                                <form th:if="${r.cancelAllowed}" th:action="@{/reservations/{id}/cancel(id=${r.id})}"
+                                      method="post" class="d-inline" data-confirm="确定取消该订单吗？"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">取消</button>
+                                </form>
+                                <a th:href="@{/reservations/{id}(id=${r.id})}"
+                                   class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(reservations)}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-journal-text"></i>没有符合条件的订单</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

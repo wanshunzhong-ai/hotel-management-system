@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('客房列表')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('rooms')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客房列表', '客房档案、房型与房态维护')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <!-- 筛选 -->
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/rooms}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">房号</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="输入房号搜索" style="width:150px">
+                        </div>
+                        <div>
+                            <label class="form-label">房态</label>
+                            <select class="form-select" name="status" style="width:140px">
+                                <option value="">全部房态</option>
+                                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                        th:selected="${status != null && status == s}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">房型</label>
+                            <select class="form-select" name="roomTypeId" style="width:170px">
+                                <option value="">全部房型</option>
+                                <option th:each="t : ${types}" th:value="${t.id}" th:text="${t.name}"
+                                        th:selected="${roomTypeId != null && roomTypeId == t.id}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">楼层</label>
+                            <select class="form-select" name="floor" style="width:120px">
+                                <option value="">全部楼层</option>
+                                <option th:each="f : ${floors}" th:value="${f}" th:text="${f} + ' 层'"
+                                        th:selected="${floor != null && floor == f}"></option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/rooms}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-door-closed me-2 text-primary"></i>客房
+                        <span class="text-muted-sm ms-1" th:text="'共 ' + ${#lists.size(rooms)} + ' 间'">共 0 间</span>
+                    </h2>
+                    <div class="d-flex gap-2">
+                        <a th:href="@{/rooms/board}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-grid-3x3-gap me-1"></i>房态图
+                        </a>
+                        <a th:href="@{/rooms/new}" class="btn btn-sm btn-primary"
+                           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                            <i class="bi bi-plus-lg me-1"></i>新增客房
+                        </a>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房号</th>
+                            <th style="width:80px">楼层</th>
+                            <th>房型</th>
+                            <th class="text-end" style="width:110px">房价</th>
+                            <th style="width:110px">房态</th>
+                            <th>备注</th>
+                            <th style="width:260px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${rooms}">
+                            <td><strong class="mono" th:text="${r.roomNo}">201</strong></td>
+                            <td th:text="${r.floor} + ' 层'">2 层</td>
+                            <td>
+                                <span th:text="${r.roomType.name}">标准大床房</span>
+                                <div class="text-muted-sm" th:text="${r.roomType.bedType} + ' · ' + ${r.roomType.area} + '㎡'">—</div>
+                            </td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(r.roomType.price, 1, 'COMMA', 2, 'POINT')}">￥268.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${r.status.color}">
+                                    <i th:class="'bi ' + ${r.status.icon}"></i>
+                                    <span th:text="${r.status.label}">空闲</span>
+                                </span>
+                            </td>
+                            <td class="text-muted-sm" th:text="${r.remark} ?: '—'">—</td>
+                            <td class="text-end">
+                                <form th:action="@{/rooms/{id}/status(id=${r.id})}" method="post"
+                                      class="d-inline-flex align-items-center gap-1">
+                                    <input type="hidden" name="redirectTo" value="/rooms">
+                                    <select class="form-select form-select-sm" name="status" style="width:104px">
+                                        <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                                th:selected="${s == r.status}"></option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">更新</button>
+                                </form>
+                                <a th:href="@{/rooms/{id}/edit(id=${r.id})}" class="btn btn-sm btn-outline-secondary"
+                                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/rooms/{id}/delete(id=${r.id})}" method="post" class="d-inline"
+                                      data-confirm="确定删除房间吗？" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(rooms)}">
+                            <td colspan="7">
+                                <div class="empty-state"><i class="bi bi-door-closed"></i>没有符合条件的客房</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

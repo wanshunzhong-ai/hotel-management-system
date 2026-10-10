@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('订单详情')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('reservations')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('订单详情', '预订信息与入住轨迹')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-journal-text me-2 text-primary"></i>
+                        <span class="mono" th:text="${reservation.orderNo}">RS202610100001</span>
+                        <span class="badge-soft ms-2" th:classappend="${reservation.status.color}"
+                              th:text="${reservation.status.label}">已预订</span>
+                    </h2>
+                    <div class="d-flex gap-2" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                        <form th:if="${reservation.checkInAllowed}"
+                              th:action="@{/reservations/{id}/checkin(id=${reservation.id})}" method="post">
+                            <button class="btn btn-sm btn-accent"><i class="bi bi-box-arrow-in-right me-1"></i>办理入住</button>
+                        </form>
+                        <form th:if="${reservation.checkOutAllowed}"
+                              th:action="@{/reservations/{id}/checkout(id=${reservation.id})}" method="post"
+                              data-confirm="确认退房并生成账单？">
+                            <button class="btn btn-sm btn-primary"><i class="bi bi-box-arrow-right me-1"></i>办理退房</button>
+                        </form>
+                        <a th:if="${reservation.status.name() == 'BOOKED'}"
+                           th:href="@{/reservations/{id}/edit(id=${reservation.id})}"
+                           class="btn btn-sm btn-outline-secondary">改单</a>
+                        <form th:if="${reservation.cancelAllowed}"
+                              th:action="@{/reservations/{id}/cancel(id=${reservation.id})}" method="post"
+                              data-confirm="确定取消该订单吗？">
+                            <button class="btn btn-sm btn-outline-danger">取消订单</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">客户</div>
+                            <div><strong th:text="${reservation.customer.name}">张伟</strong></div>
+                            <div class="text-muted-sm mono" th:text="${reservation.customer.phone}">—</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">房间</div>
+                            <div><strong class="mono" th:text="${reservation.room.roomNo}">201</strong>
+                                <span class="text-muted-sm ms-1" th:text="${reservation.room.roomType.name}">—</span>
+                            </div>
+                            <div class="text-muted-sm" th:text="${reservation.room.floor} + ' 层 · ' + ${reservation.room.roomType.bedType}">—</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">入住 / 离店</div>
+                            <div>
+                                <span th:text="${#temporals.format(reservation.checkInDate,'yyyy-MM-dd')}">—</span>
+                                <i class="bi bi-arrow-right mx-1"></i>
+                                <span th:text="${#temporals.format(reservation.checkOutDate,'yyyy-MM-dd')}">—</span>
+                            </div>
+                            <div class="text-muted-sm" th:text="${reservation.nightCount} + ' 晚 · ' + ${reservation.guestCount} + ' 人'">—</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">房费</div>
+                            <div class="money-lg"
+                                 th:text="'￥' + ${#numbers.formatDecimal(reservation.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</div>
+                            <div class="text-muted-sm" th:text="'￥' + ${#numbers.formatDecimal(reservation.unitPrice, 1, 'COMMA', 2, 'POINT')} + ' / 晚'">—</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">操作人</div>
+                            <div th:text="${reservation.operator} ?: '—'">—</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted-sm">下单时间</div>
+                            <div th:text="${reservation.createdAt == null ? '—' : #temporals.format(reservation.createdAt,'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted-sm">备注</div>
+                            <div th:text="${reservation.remark} ?: '—'">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <div class="card h-100">
+                        <div class="card-header"><h2><i class="bi bi-clock-history me-2 text-primary"></i>入住轨迹</h2></div>
+                        <div class="card-body">
+                            <div class="timeline-item">
+                                <div class="timeline-dot bg-soft-primary"><i class="bi bi-calendar-plus"></i></div>
+                                <div>
+                                    <div><b>创建预订</b></div>
+                                    <div class="text-muted-sm"
+                                         th:text="${reservation.createdAt == null ? '—' : #temporals.format(reservation.createdAt,'yyyy-MM-dd HH:mm')}">—</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-dot bg-soft-danger"><i class="bi bi-box-arrow-in-right"></i></div>
+                                <div>
+                                    <div><b>办理入住</b></div>
+                                    <div class="text-muted-sm"
+                                         th:text="${reservation.checkInTime == null ? '尚未入住' : #temporals.format(reservation.checkInTime,'yyyy-MM-dd HH:mm')}">—</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-dot bg-soft-success"><i class="bi bi-box-arrow-right"></i></div>
+                                <div>
+                                    <div><b>办理退房</b></div>
+                                    <div class="text-muted-sm"
+                                         th:text="${reservation.checkOutTime == null ? '尚未退房' : #temporals.format(reservation.checkOutTime,'yyyy-MM-dd HH:mm')}">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card h-100">
+                        <div class="card-header"><h2><i class="bi bi-person-lines-fill me-2 text-primary"></i>客户档案</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <div class="d-flex justify-content-between"><span>姓名</span><b th:text="${reservation.customer.name}">—</b></div>
+                            <div class="d-flex justify-content-between"><span>性别</span><span th:text="${reservation.customer.gender.label}">—</span></div>
+                            <div class="d-flex justify-content-between"><span>证件号</span><span class="mono" th:text="${reservation.customer.idNoMasked}">—</span></div>
+                            <div class="d-flex justify-content-between"><span>会员等级</span><span th:text="${reservation.customer.memberLevel}">—</span></div>
+                            <div class="divider"></div>
+                            <a th:href="@{/customers/{id}(id=${reservation.customer.id})}" class="btn btn-sm btn-outline-secondary w-100">
+                                查看完整档案
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
