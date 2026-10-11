@@ -41,6 +41,7 @@ public class BillService {
     private final ReservationRepository reservationRepository;
     private final SerialNumberService serialNumberService;
     private final OperationLogService operationLogService;
+    private final MinibarService minibarService;
 
     /**
      * 账单检索。
@@ -77,29 +78,32 @@ public class BillService {
      */
     @Transactional
     public Bill createFromReservation(Long reservationId, String operator) {
-        return billRepository.findByReservationId(reservationId).orElseGet(() -> {
+        Bill bill = billRepository.findByReservationId(reservationId).orElseGet(() -> {
             Reservation reservation = reservationRepository.findById(reservationId)
                     .orElseThrow(() -> new BusinessException("预订单不存在"));
 
             BigDecimal roomAmount = reservation.getActualRoomAmount();
 
-            Bill bill = new Bill();
-            bill.setBillNo(serialNumberService.nextBillNo());
-            bill.setReservation(reservation);
-            bill.setCustomer(reservation.getCustomer());
-            bill.setRoom(reservation.getRoom());
-            bill.setRoomAmount(roomAmount);
-            bill.setOtherAmount(BigDecimal.ZERO);
-            bill.setDiscountAmount(BigDecimal.ZERO);
-            bill.setEarlyCheckoutDiscount(reservation.getEarlyCheckoutDiscount());
-            bill.setTotalAmount(roomAmount);
-            bill.setDeposit(BigDecimal.ZERO);
-            bill.setPaidAmount(BigDecimal.ZERO);
-            bill.setRefundAmount(BigDecimal.ZERO);
-            bill.setStatus(BillStatus.UNPAID);
-            bill.setOperator(operator);
-            return billRepository.save(bill);
+            Bill created = new Bill();
+            created.setBillNo(serialNumberService.nextBillNo());
+            created.setReservation(reservation);
+            created.setCustomer(reservation.getCustomer());
+            created.setRoom(reservation.getRoom());
+            created.setRoomAmount(roomAmount);
+            created.setOtherAmount(BigDecimal.ZERO);
+            created.setDiscountAmount(BigDecimal.ZERO);
+            created.setEarlyCheckoutDiscount(reservation.getEarlyCheckoutDiscount());
+            created.setTotalAmount(roomAmount);
+            created.setDeposit(BigDecimal.ZERO);
+            created.setPaidAmount(BigDecimal.ZERO);
+            created.setRefundAmount(BigDecimal.ZERO);
+            created.setStatus(BillStatus.UNPAID);
+            created.setOperator(operator);
+            return billRepository.save(created);
         });
+        // 客房部的迷你吧 / 客用品挂账：退房结账时自动并入账单其他消费（同一事务）
+        minibarService.mergeIntoBill(bill.getReservation(), bill, operator);
+        return bill;
     }
 
     /** 追加消费明细 */

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('维修工单')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('maintenance')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('维修工单', '报修 → 开工 → 完工；空闲/待清洁房间报修自动置「维修中」，完工后转「待清洁」')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-tools me-2 text-primary"></i>报修登记
+                        <span class="text-muted-sm ms-2" th:text="'待处理 / 维修中 ' + ${openCount} + ' 单'">0 单</span>
+                    </h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/maintenance}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-3">
+                                <label class="form-label">房间</label>
+                                <select class="form-select" name="roomId" required>
+                                    <option value="">请选择</option>
+                                    <option th:each="r : ${rooms}" th:value="${r.id}"
+                                            th:text="${r.roomNo} + ' · ' + ${r.status.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-lg-7">
+                                <label class="form-label">故障描述</label>
+                                <input type="text" class="form-control" name="description" required maxlength="500"
+                                       placeholder="如：淋浴花洒漏水 / 空调不制冷">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>报修
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/maintenance}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">状态</label>
+                            <select class="form-select" name="status" style="width:150px">
+                                <option value="">全部状态</option>
+                                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                        th:selected="${status == s}"></option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/maintenance}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-clipboard-check me-2 text-primary"></i>工单列表
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${orders.size()} + ' 条'">共 0 条</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房间</th>
+                            <th>故障描述</th>
+                            <th style="width:100px">状态</th>
+                            <th style="width:100px">维修人</th>
+                            <th style="width:200px">进度</th>
+                            <th style="width:110px">费用</th>
+                            <th style="width:100px">报修人</th>
+                            <th style="width:230px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="o : ${orders}">
+                            <td class="mono" th:text="${o.room.roomNo}">8801</td>
+                            <td>
+                                <div th:text="${o.description}">—</div>
+                                <div th:if="${o.result}" class="text-muted-sm" th:text="'维修结果：' + ${o.result}">—</div>
+                            </td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${o.status.color}"
+                                      th:text="${o.status.label}">待处理</span>
+                            </td>
+                            <td th:text="${o.handler} ?: '—'">—</td>
+                            <td class="text-muted-sm">
+                                <div th:if="${o.startedAt}" th:text="'开工 ' + ${#temporals.format(o.startedAt,'MM-dd HH:mm')}">—</div>
+                                <div th:if="${o.finishedAt}" th:text="'完工 ' + ${#temporals.format(o.finishedAt,'MM-dd HH:mm')}">—</div>
+                                <span th:unless="${o.startedAt != null or o.finishedAt != null}">—</span>
+                            </td>
+                            <td th:text="'￥' + ${#numbers.formatDecimal(o.cost,1,'COMMA',2,'POINT')}">￥0.00</td>
+                            <td th:text="${o.operator} ?: '—'">前台-小林</td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <form th:if="${o.status.name() == 'OPEN'}"
+                                          th:action="@{'/maintenance/' + ${o.id} + '/start'}" method="post"
+                                          class="d-flex gap-1">
+                                        <input type="text" class="form-control form-control-sm" name="handler"
+                                               placeholder="维修人" style="min-width:80px">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">开工</button>
+                                    </form>
+                                    <form th:if="${o.status.name() == 'OPEN' or o.status.name() == 'FIXING'}"
+                                          th:action="@{'/maintenance/' + ${o.id} + '/complete'}" method="post"
+                                          class="d-flex gap-1">
+                                        <input type="text" class="form-control form-control-sm" name="result"
+                                               placeholder="维修结果" style="min-width:80px">
+                                        <input type="number" class="form-control form-control-sm" name="cost"
+                                               step="0.01" min="0" placeholder="费用" style="width:80px">
+                                        <button type="submit" class="btn btn-sm btn-success">完工</button>
+                                    </form>
+                                    <form th:if="${o.status.name() == 'OPEN' or o.status.name() == 'FIXING'}"
+                                          th:action="@{'/maintenance/' + ${o.id} + '/cancel'}" method="post"
+                                          onsubmit="return confirm('确认取消该工单？')">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">取消</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${orders.isEmpty()}">
+                            <td colspan="8">
+                                <div class="empty-state">
+                                    <i class="bi bi-tools"></i>暂无维修工单
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

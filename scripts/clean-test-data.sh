@@ -32,6 +32,33 @@ run "SELECT id, order_no, status, room_id, remark FROM reservation WHERE remark 
 
 echo
 echo "=== 执行清理 ==="
+# 第四批（客房部模块）的表在旧库中可能还不存在，先探测再决定是否清理
+HAS_TABLES="$(run "SELECT COUNT(*) FROM information_schema.tables
+                   WHERE table_schema = DATABASE()
+                     AND table_name IN ('housekeeping_task','minibar_item','maintenance_order','lost_found');" \
+              | grep -E '^[0-9]+' | head -1 | tr -dc '0-9')"
+[ -z "$HAS_TABLES" ] && HAS_TABLES=0
+
+# 客房部表：先清理迷你吧挂账（外键指向 reservation）与工单，再删订单
+if [ "$HAS_TABLES" = "4" ]; then
+  run "DELETE FROM housekeeping_task WHERE remark LIKE '%测试%';"
+  run "DELETE FROM minibar_item
+       WHERE note LIKE '%测试%'
+          OR item_name LIKE '%测试%'
+          OR reservation_id IN (SELECT id FROM reservation WHERE remark LIKE '%测试%');"
+  run "CREATE TEMPORARY TABLE tmp_test_mt AS
+         SELECT id, room_id FROM maintenance_order WHERE description LIKE '%测试%';
+       DELETE FROM maintenance_order WHERE id IN (SELECT id FROM tmp_test_mt);
+       UPDATE room r SET r.status = 'AVAILABLE'
+       WHERE r.id IN (SELECT room_id FROM tmp_test_mt)
+         AND r.status IN ('MAINTENANCE','CLEANING')
+         AND NOT EXISTS (SELECT 1 FROM reservation v
+                         WHERE v.room_id = r.id AND v.status IN ('BOOKED','CHECKED_IN'));"
+  run "DELETE FROM lost_found WHERE description LIKE '%测试%' OR item_name LIKE '%测试%';"
+else
+  echo "（跳过客房部表：当前库尚未创建 housekeeping_task / minibar_item / maintenance_order / lost_found）"
+fi
+
 run "
 CREATE TEMPORARY TABLE tmp_test_res AS
   SELECT id, room_id FROM reservation WHERE remark LIKE '%测试%';
@@ -50,6 +77,13 @@ WHERE r.id IN (SELECT room_id FROM tmp_test_res)
         SELECT 1 FROM reservation v
         WHERE v.room_id = r.id AND v.status IN ('BOOKED', 'CHECKED_IN')
       );
+
+-- 被测试误改成「待清洁」但仍有客人在住的房间，还原为「已入住」
+UPDATE room r
+SET r.status = 'OCCUPIED'
+WHERE r.status = 'CLEANING'
+  AND EXISTS (SELECT 1 FROM reservation v
+              WHERE v.room_id = r.id AND v.status = 'CHECKED_IN');
 "
 
 echo
@@ -64,4 +98,15 @@ UNION ALL SELECT 'users', COUNT(*) FROM sys_user;
 SELECT status, COUNT(*) AS cnt FROM room GROUP BY status ORDER BY status;
 SELECT IFNULL(SUM(total_amount), 0) AS settled_revenue FROM bill WHERE status = 'SETTLED';
 "
+if [ "$HAS_TABLES" = "4" ]; then
+  echo
+  echo "=== 客房部模块表概览 ==="
+  run "
+SELECT 'housekeeping_task' AS item, COUNT(*) AS cnt FROM housekeeping_task
+UNION ALL SELECT 'minibar_item', COUNT(*) FROM minibar_item
+UNION ALL SELECT 'maintenance_order', COUNT(*) FROM maintenance_order
+UNION ALL SELECT 'lost_found', COUNT(*) FROM lost_found
+UNION ALL SELECT 'operation_log', COUNT(*) FROM operation_log;
+"
+fi
 echo "完成。"

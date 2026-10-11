@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('迷你吧挂账')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('minibar')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('迷你吧挂账', '在住期间挂账到房间，退房结账时自动并入账单「其他消费」')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-cup-straw me-2 text-primary"></i>新增挂账
+                        <span class="text-muted-sm ms-2" th:text="'待入账 ' + ${pendingCount} + ' 条'">待入账 0 条</span>
+                    </h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/housekeeping/minibar}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-3">
+                                <label class="form-label">在住房间</label>
+                                <select class="form-select" name="roomId" required>
+                                    <option value="">请选择</option>
+                                    <option th:each="r : ${inHouse}" th:value="${r.room.id}"
+                                            th:text="${r.room.roomNo} + ' · ' + ${r.orderNo}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">品名</label>
+                                <input type="text" class="form-control" name="itemName" required maxlength="100"
+                                       placeholder="如：矿泉水">
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">数量</label>
+                                <input type="number" class="form-control" name="quantity" value="1" min="1">
+                            </div>
+                            <div class="col-3 col-lg-2">
+                                <label class="form-label">单价</label>
+                                <input type="number" class="form-control" name="unitPrice" step="0.01" min="0" value="0">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="note" maxlength="200">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>挂账
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-muted-sm mt-2">
+                            只有「已入住」的房间可以挂账；中途取消请在下方列表里删除未入账记录。
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/housekeeping/minibar}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">状态</label>
+                            <select class="form-select" name="status" style="width:160px">
+                                <option value="">全部状态</option>
+                                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                        th:selected="${status == s}"></option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/housekeeping/minibar}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-list-ul me-2 text-primary"></i>挂账记录
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${items.size()} + ' 条'">共 0 条</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房间</th>
+                            <th style="width:150px">订单号</th>
+                            <th>品名</th>
+                            <th style="width:70px">数量</th>
+                            <th style="width:100px">单价</th>
+                            <th style="width:110px">金额</th>
+                            <th style="width:110px">状态</th>
+                            <th style="width:100px">账单</th>
+                            <th style="width:100px">操作人</th>
+                            <th style="width:130px">时间</th>
+                            <th style="width:90px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${items}">
+                            <td class="mono" th:text="${i.room.roomNo}">8801</td>
+                            <td class="mono text-muted-sm" th:text="${i.reservation.orderNo}">—</td>
+                            <td th:text="${i.itemName}">矿泉水</td>
+                            <td th:text="${i.quantity}">1</td>
+                            <td th:text="'￥' + ${#numbers.formatDecimal(i.unitPrice,1,'COMMA',2,'POINT')}">￥0.00</td>
+                            <td th:text="'￥' + ${#numbers.formatDecimal(i.amount,1,'COMMA',2,'POINT')}">￥0.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.status.color}"
+                                      th:text="${i.status.label}">待入账</span>
+                            </td>
+                            <td class="text-muted-sm mono"
+                                th:text="${i.billId == null ? '—' : '#' + i.billId}">—</td>
+                            <td th:text="${i.operator} ?: '—'">客房-王姐</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${i.createdAt == null ? '—' : #temporals.format(i.createdAt,'MM-dd HH:mm')}">—</td>
+                            <td>
+                                <form th:if="${i.status.name() == 'PENDING'}"
+                                      th:action="@{'/housekeeping/minibar/' + ${i.id} + '/delete'}" method="post"
+                                      onsubmit="return confirm('确认取消这条挂账？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">取消</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${items.isEmpty()}">
+                            <td colspan="11">
+                                <div class="empty-state">
+                                    <i class="bi bi-cup-straw"></i>暂无挂账记录
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

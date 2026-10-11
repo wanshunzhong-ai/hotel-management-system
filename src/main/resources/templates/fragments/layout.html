@@ -46,6 +46,24 @@
         <a th:href="@{/rooms/board}" class="nav-link-item" th:classappend="${active == 'room-board'} ? 'active'">
             <i class="bi bi-grid-3x3-gap"></i><span>房态一览</span>
         </a>
+        <a th:href="@{/housekeeping/tasks}" class="nav-link-item"
+           th:classappend="${active == 'housekeeping'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-brush"></i><span>派工与验收</span>
+        </a>
+        <a th:href="@{/housekeeping/minibar}" class="nav-link-item"
+           th:classappend="${active == 'minibar'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-cup-straw"></i><span>迷你吧挂账</span>
+        </a>
+        <a th:href="@{/maintenance}" class="nav-link-item" th:classappend="${active == 'maintenance'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-tools"></i><span>维修工单</span>
+        </a>
+        <a th:href="@{/lost-found}" class="nav-link-item" th:classappend="${active == 'lostfound'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-search-heart"></i><span>失物招领</span>
+        </a>
         <a th:href="@{/rooms}" class="nav-link-item" th:classappend="${active == 'rooms'} ? 'active'">
             <i class="bi bi-door-closed"></i><span>客房列表</span>
         </a>

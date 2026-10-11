@@ -47,6 +47,12 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "RECEPTION")
                         // 房态维护三类角色都可
                         .requestMatchers("/rooms/**").hasAnyRole("ADMIN", "RECEPTION", "HOUSEKEEPING")
+                        // 客房部工作台：派工验收 / 迷你吧挂账（验收动作另由 @PreAuthorize 限管理员）
+                        .requestMatchers("/housekeeping/**").hasAnyRole("ADMIN", "RECEPTION", "HOUSEKEEPING")
+                        // 维修工单
+                        .requestMatchers("/maintenance/**").hasAnyRole("ADMIN", "RECEPTION", "HOUSEKEEPING")
+                        // 失物招领
+                        .requestMatchers("/lost-found/**").hasAnyRole("ADMIN", "RECEPTION", "HOUSEKEEPING")
                         // 房型维护
                         .requestMatchers("/room-types/**").hasAnyRole("ADMIN", "RECEPTION")
                         // 前台核心业务

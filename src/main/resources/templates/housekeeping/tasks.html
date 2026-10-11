@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('派工与验收')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('housekeeping')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('派工与验收', '派工给客房服务员 → 服务员完成 → 主管验收；验收通过房间自动转「空闲」')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">待完成</div>
+                            <div class="stat-value" th:text="${pendingCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">待验收</div>
+                            <div class="stat-value" th:text="${doneCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                <div class="card-header">
+                    <h2><i class="bi bi-person-plus me-2 text-primary"></i>新建派工单</h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/housekeeping/tasks}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">房间</label>
+                                <select class="form-select" name="roomId" required>
+                                    <option value="">请选择</option>
+                                    <option th:each="r : ${rooms}" th:value="${r.id}"
+                                            th:text="${r.roomNo}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">任务类型</label>
+                                <select class="form-select" name="type">
+                                    <option th:each="t : ${taskTypes}" th:value="${t}" th:text="${t.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">服务员</label>
+                                <select class="form-select" name="assigneeId" required>
+                                    <option value="">请选择</option>
+                                    <option th:each="u : ${staff}" th:value="${u.id}"
+                                            th:text="${u.realName}"></option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-lg-4">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="remark" maxlength="200"
+                                       placeholder="如：客人 12:00 前退房，优先清扫">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-send me-1"></i>派工
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/housekeeping/tasks}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">状态</label>
+                            <select class="form-select" name="status" style="width:150px">
+                                <option value="">全部状态</option>
+                                <option th:each="s : ${taskStatuses}" th:value="${s}" th:text="${s.label}"
+                                        th:selected="${status == s}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">服务员</label>
+                            <select class="form-select" name="assigneeId" style="width:160px">
+                                <option value="">全部人员</option>
+                                <option th:each="u : ${staff}" th:value="${u.id}" th:text="${u.realName}"
+                                        th:selected="${assigneeId != null and assigneeId == u.id}"></option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/housekeeping/tasks}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-brush me-2 text-primary"></i>派工单
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${tasks.size()} + ' 条'">共 0 条</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房间</th>
+                            <th style="width:100px">类型</th>
+                            <th style="width:110px">状态</th>
+                            <th style="width:100px">服务员</th>
+                            <th>派工备注</th>
+                            <th style="width:130px">完成时间</th>
+                            <th style="width:180px">验收</th>
+                            <th style="width:190px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="t : ${tasks}">
+                            <td class="mono" th:text="${t.room.roomNo}">8801</td>
+                            <td th:text="${t.type.label}">走客房</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${t.status.color}"
+                                      th:text="${t.status.label}">待完成</span>
+                            </td>
+                            <td th:text="${t.assignee.realName}">客房-王姐</td>
+                            <td th:text="${t.remark} ?: '—'">—</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${t.doneAt == null ? '—' : #temporals.format(t.doneAt,'MM-dd HH:mm')}">—</td>
+                            <td class="text-muted-sm">
+                                <div th:if="${t.inspector}" th:text="${t.inspector} + ' · ' + ${#temporals.format(t.inspectedAt,'MM-dd HH:mm')}">—</div>
+                                <div th:if="${t.inspectRemark}" class="text-danger" th:text="${t.inspectRemark}">—</div>
+                                <span th:unless="${t.inspector}" >—</span>
+                            </td>
+                            <td>
+                                <form th:if="${t.status.name() == 'PENDING' or t.status.name() == 'REJECTED'}"
+                                      th:action="@{'/housekeeping/tasks/' + ${t.id} + '/done'}" method="post"
+                                      class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-check2 me-1"></i>标记完成
+                                    </button>
+                                </form>
+                                <form th:if="${t.status.name() == 'DONE'}" sec:authorize="hasRole('ADMIN')"
+                                      th:action="@{'/housekeeping/tasks/' + ${t.id} + '/inspect'}" method="post">
+                                    <div class="d-flex gap-1">
+                                        <input type="text" class="form-control form-control-sm" name="inspectRemark"
+                                               placeholder="备注（打回必填）" style="min-width:90px">
+                                        <button type="submit" name="action" value="approve"
+                                                class="btn btn-sm btn-success">通过</button>
+                                        <button type="submit" name="action" value="reject"
+                                                class="btn btn-sm btn-outline-danger">打回</button>
+                                    </div>
+                                </form>
+                                <span th:if="${t.status.name() == 'APPROVED'}" class="text-muted-sm">已完成</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${tasks.isEmpty()}">
+                            <td colspan="8">
+                                <div class="empty-state">
+                                    <i class="bi bi-brush"></i>暂无派工单
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
