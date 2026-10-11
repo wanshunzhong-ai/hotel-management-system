@@ -2,9 +2,13 @@ package com.hotel.hms.config;
 
 import com.hotel.hms.entity.Bill;
 import com.hotel.hms.entity.BillStatus;
+import com.hotel.hms.entity.ConsumableCategory;
+import com.hotel.hms.entity.ConsumableItem;
 import com.hotel.hms.entity.Customer;
 import com.hotel.hms.entity.Gender;
 import com.hotel.hms.entity.IdType;
+import com.hotel.hms.entity.LinenCategory;
+import com.hotel.hms.entity.LinenStock;
 import com.hotel.hms.entity.PayMethod;
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.ReservationStatus;
@@ -14,11 +18,14 @@ import com.hotel.hms.entity.RoomStatus;
 import com.hotel.hms.entity.RoomType;
 import com.hotel.hms.entity.User;
 import com.hotel.hms.repository.BillRepository;
+import com.hotel.hms.repository.ConsumableItemRepository;
 import com.hotel.hms.repository.CustomerRepository;
+import com.hotel.hms.repository.LinenStockRepository;
 import com.hotel.hms.repository.ReservationRepository;
 import com.hotel.hms.repository.RoomRepository;
 import com.hotel.hms.repository.RoomTypeRepository;
 import com.hotel.hms.repository.UserRepository;
+import com.hotel.hms.service.ConsumableService;
 import com.hotel.hms.service.SerialNumberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +55,9 @@ public class DataInitializer implements CommandLineRunner {
     private final CustomerRepository customerRepository;
     private final ReservationRepository reservationRepository;
     private final BillRepository billRepository;
+    private final LinenStockRepository linenStockRepository;
+    private final ConsumableItemRepository consumableItemRepository;
+    private final ConsumableService consumableService;
     private final SerialNumberService serialNumberService;
     private final PasswordEncoder passwordEncoder;
 
@@ -59,6 +69,12 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         initUsers();
         migrateLegacyRoomStatus();
+        seedLinenStock();
+        seedConsumables();
+        int issued = consumableService.ensureRoomTokens();
+        if (issued > 0) {
+            log.info("已为 {} 间未发放二维码的房间补发扫码令牌。", issued);
+        }
         if (!initDemoData) {
             return;
         }
@@ -66,6 +82,66 @@ public class DataInitializer implements CommandLineRunner {
             initHotelData();
             log.info("演示数据初始化完成。");
         }
+    }
+
+    /**
+     * 客房消费目录（幂等：已有任何一条就跳过）。
+     */
+    private void seedConsumables() {
+        if (consumableItemRepository.count() > 0) {
+            return;
+        }
+        seedConsumable("矿泉水", ConsumableCategory.MINIBAR, "8.00", "500ml 装", true);
+        seedConsumable("可乐", ConsumableCategory.MINIBAR, "10.00", "330ml 罐装", true);
+        seedConsumable("青岛啤酒", ConsumableCategory.MINIBAR, "18.00", "500ml 罐装", true);
+        seedConsumable("红牛", ConsumableCategory.MINIBAR, "15.00", "250ml 罐装", true);
+        seedConsumable("坚果拼盘", ConsumableCategory.SNACK, "28.00", "混合坚果小食", true);
+        seedConsumable("时令水果盘", ConsumableCategory.SNACK, "38.00", "当日新鲜果切", true);
+        seedConsumable("一次性洗漱套装", ConsumableCategory.DAILY, "12.00", "牙具 + 梳子 + 剃须刀", true);
+        seedConsumable("针线包", ConsumableCategory.DAILY, "6.00", "含黑白线、纽扣", true);
+        seedConsumable("客房简餐", ConsumableCategory.OTHER, "45.00", "需提前 30 分钟下单", false);
+        log.info("客房消费目录已建立（9 个项目，其中 1 个默认下架）。");
+    }
+
+    private void seedConsumable(String name, ConsumableCategory category, String price,
+                                String note, boolean enabled) {
+        ConsumableItem item = new ConsumableItem();
+        item.setItemName(name);
+        item.setCategory(category);
+        item.setUnitPrice(new BigDecimal(price));
+        item.setNote(note);
+        item.setEnabled(enabled);
+        consumableItemRepository.save(item);
+    }
+
+    /**
+     * 布草库存基础品名（幂等：已有任何一条记录就跳过）。
+     *
+     * <p>与客房演示数据分开处理——老库已经有房型/房间，不会走 {@link #initHotelData}，
+     * 但新加的布草表仍然需要一份可用的初始台账。
+     */
+    private void seedLinenStock() {
+        if (linenStockRepository.count() > 0) {
+            return;
+        }
+        seedLinen("床单", LinenCategory.BEDDING, 240, 60);
+        seedLinen("被套", LinenCategory.BEDDING, 180, 50);
+        seedLinen("枕套", LinenCategory.BEDDING, 320, 80);
+        seedLinen("大浴巾", LinenCategory.TOWEL, 160, 60);
+        seedLinen("面巾", LinenCategory.TOWEL, 200, 80);
+        seedLinen("地巾", LinenCategory.TOWEL, 90, 40);
+        log.info("布草库存初始台账已建立（6 个品名）。");
+    }
+
+    private void seedLinen(String name, LinenCategory category, int inStock, int minStock) {
+        LinenStock stock = new LinenStock();
+        stock.setItemName(name);
+        stock.setCategory(category);
+        stock.setInStock(inStock);
+        stock.setInWash(0);
+        stock.setScrapped(0);
+        stock.setMinStock(minStock);
+        linenStockRepository.save(stock);
     }
 
     /**

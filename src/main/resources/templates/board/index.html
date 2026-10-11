@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="'房态大屏 · ' + ${hotelName}">房态大屏</title>
+    <style>
+        :root {
+            --bg: #080d17; --panel: #101a2c; --panel-2: #16243c;
+            --line: #22324e; --text: #e6edf7; --muted: #8fa3c0;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text);
+               font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+        .board-head { display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+                      padding: 14px 22px; background: var(--panel); border-bottom: 1px solid var(--line); }
+        .board-title { font-size: 22px; font-weight: 500; letter-spacing: 1px; }
+        .board-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .clock { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+        .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+        .chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+                padding: 7px 13px; min-width: 82px; }
+        .chip .k { font-size: 12px; color: var(--muted); }
+        .chip .v { font-size: 22px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .toolbar { display: flex; align-items: center; gap: 10px; }
+        .toolbar button, .toolbar a {
+            background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+            border-radius: 9px; padding: 7px 13px; font-size: 13px; cursor: pointer; text-decoration: none; }
+        .toolbar button:hover, .toolbar a:hover { border-color: #3b5378; }
+        .board-body { padding: 16px 22px 26px; }
+        .floor-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+        .floor-label { flex: 0 0 74px; padding-top: 12px; }
+        .floor-label .f { font-size: 22px; font-weight: 500; }
+        .floor-label .s { font-size: 12px; color: var(--muted); }
+        .rooms { flex: 1; display: grid; gap: 10px;
+                 grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); }
+        .cell { border-radius: 12px; padding: 10px 12px; border: 1px solid transparent;
+                background: var(--panel); min-height: 86px; display: flex; flex-direction: column; justify-content: space-between; }
+        .cell .no { font-size: 24px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+        .cell .type { font-size: 11px; color: var(--muted); margin-top: 3px; }
+        .cell .st { font-size: 12px; margin-top: 6px; }
+        .cell .guest { font-size: 12px; color: #cbd8ea; margin-top: 2px; overflow: hidden;
+                       text-overflow: ellipsis; white-space: nowrap; }
+        .cell .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .st-FREE        { background: #0c2018; border-color: #1c7a4a; }
+        .st-CLEANING    { background: #241f0d; border-color: #9a7b16; }
+        .st-DEPARTING   { background: #241a0d; border-color: #a3601a; }
+        .st-ARRIVING    { background: #0d1c2c; border-color: #2f6fa8; }
+        .st-RESERVED    { background: #131a30; border-color: #4a5aa8; }
+        .st-IN_HOUSE    { background: #2a1014; border-color: #b03a45; }
+        .st-MAINTENANCE { background: #1b2029; border-color: #5c6879; }
+        .dot-FREE { background: #22c55e; } .dot-CLEANING { background: #eab308; }
+        .dot-DEPARTING { background: #fb923c; } .dot-ARRIVING { background: #38bdf8; }
+        .dot-RESERVED { background: #818cf8; } .dot-IN_HOUSE { background: #f87171; }
+        .dot-MAINTENANCE { background: #94a3b8; }
+        .legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 22px 20px; color: var(--muted); font-size: 13px; }
+        .legend i { margin-right: 6px; }
+        .stale { color: #fbbf24; }
+        @media (max-width: 900px) {
+            .board-title { font-size: 18px; } .clock { font-size: 20px; }
+            .rooms { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+            .cell .no { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+<div class="board-head">
+    <div>
+        <div class="board-title" th:text="${hotelName} + ' · 房态大屏'">云栖大酒店 · 房态大屏</div>
+        <div class="board-sub" id="boardDate" th:text="'营业日 ' + ${boardDate}">营业日</div>
+    </div>
+    <div>
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="board-sub" id="refreshInfo">每 10 秒自动刷新</div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="toolbar">
+        <button type="button" id="pauseBtn">暂停刷新</button>
+        <a th:href="@{/rooms/board}">房态一览</a>
+    </div>
+</div>
+
+<div class="legend" id="legend"></div>
+<div class="board-body" id="board">
+    <div style="color:#8fa3c0;padding:20px">正在加载房态…</div>
+</div>
+
+<script th:inline="javascript">
+    var BOARD_DATE = /*[[${boardDateIso}]]*/ '';
+    var INTERVAL_MS = 10000;
+    var paused = false;
+    var timer = null;
+    var countdown = INTERVAL_MS / 1000;
+
+    var LEGEND = [
+        { state: 'FREE', label: '空闲' }, { state: 'CLEANING', label: '待清洁' },
+        { state: 'DEPARTING', label: '今日离店' }, { state: 'ARRIVING', label: '预抵' },
+        { state: 'RESERVED', label: '已预订' }, { state: 'IN_HOUSE', label: '在住' },
+        { state: 'MAINTENANCE', label: '维修中' }
+    ];
+
+    function esc(v) {
+        if (v === null || v === undefined) return '';
+        return String(v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function tickClock() {
+        var d = new Date();
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        document.getElementById('clock').textContent =
+            p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    function renderChips(s) {
+        var items = [
+            ['总房', s.total], ['可售', s.sellable], ['已售', s.sold],
+            ['在住', s.IN_HOUSE], ['空闲', s.FREE], ['待清洁', s.CLEANING],
+            ['维修中', s.MAINTENANCE], ['出租率', Number(s.occupancy).toFixed(1) + '%']
+        ];
+        document.getElementById('chips').innerHTML = items.map(function (it) {
+            return '<div class="chip"><div class="k">' + it[0] + '</div><div class="v">' + esc(it[1]) + '</div></div>';
+        }).join('');
+    }
+
+    function renderFloors(floors) {
+        if (!floors || !floors.length) {
+            document.getElementById('board').innerHTML =
+                '<div style="color:#8fa3c0;padding:20px">还没有客房数据</div>';
+            return;
+        }
+        document.getElementById('board').innerHTML = floors.map(function (f) {
+            var cells = f.rooms.map(function (r) {
+                return '<div class="cell st-' + esc(r.state) + '">' +
+                    '<div><div class="no">' + esc(r.roomNo) + '</div>' +
+                    '<div class="type">' + esc(r.type) + '</div></div>' +
+                    '<div><div class="st"><span class="dot dot-' + esc(r.state) + '"></span>' + esc(r.label) + '</div>' +
+                    (r.guest ? '<div class="guest">' + esc(r.guest) + '</div>' +
+                        '<div class="guest">' + esc(r.period || '') + '</div>' : '') +
+                    '</div></div>';
+            }).join('');
+            return '<div class="floor-row"><div class="floor-label"><div class="f">' + f.floor +
+                'F</div><div class="s">' + f.rooms.length + ' 间</div></div>' +
+                '<div class="rooms">' + cells + '</div></div>';
+        }).join('');
+    }
+
+    function renderLegend() {
+        document.getElementById('legend').innerHTML = LEGEND.map(function (l) {
+            return '<span><i class="dot dot-' + l.state + '" style="display:inline-block"></i>' + l.label + '</span>';
+        }).join('') + '<span class="stale" id="staleInfo"></span>';
+    }
+
+    function load() {
+        fetch('/api/board?date=' + encodeURIComponent(BOARD_DATE), { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (data) {
+                renderChips(data.stats);
+                renderFloors(data.floors);
+                var info = document.getElementById('refreshInfo');
+                if (info) info.textContent = '数据时间 ' + data.serverTime;
+                var st = document.getElementById('staleInfo');
+                if (st) st.textContent = '';
+                countdown = INTERVAL_MS / 1000;
+            })
+            .catch(function (e) {
+                var st = document.getElementById('staleInfo');
+                if (st) st.textContent = '数据获取失败（' + e.message + '），将在下一轮重试';
+            });
+    }
+
+    function countdownTick() {
+        if (paused) return;
+        countdown--;
+        var info = document.getElementById('refreshInfo');
+        if (info && countdown >= 0) {
+            info.textContent = info.textContent.replace(/\s*·\s*\d+s 后刷新$/, '') + ' · ' + countdown + 's 后刷新';
+        }
+        if (countdown <= 0) { load(); }
+    }
+
+    document.getElementById('pauseBtn').addEventListener('click', function () {
+        paused = !paused;
+        this.textContent = paused ? '继续刷新' : '暂停刷新';
+    });
+
+    renderLegend();
+    tickClock();
+    setInterval(tickClock, 1000);
+    setInterval(countdownTick, 1000);
+    load();
+</script>
+</body>
+</html>

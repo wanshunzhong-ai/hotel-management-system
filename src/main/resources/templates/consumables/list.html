@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('扫码消费')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('consumables')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('扫码消费', '住客扫房间二维码自助下单，费用先挂账、退房时一并结算；下方可维护消费目录与房间二维码')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <!-- 消费目录 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-list-ul me-2 text-primary"></i>消费项目目录
+                        <span class="text-muted-sm ms-2" th:text="'上架 ' + ${enabledCount} + ' 项'">上架 0 项</span>
+                    </h2>
+                    <div class="text-muted-sm">只有「上架」的项目会出现在住客扫码页</div>
+                </div>
+
+                <div class="card-body" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                    <form th:action="@{/consumables}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-3">
+                                <label class="form-label">品名</label>
+                                <input type="text" class="form-control" name="itemName" required maxlength="100"
+                                       placeholder="如：矿泉水 / 啤酒 / 一次性拖鞋">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">分类</label>
+                                <select class="form-select" name="category">
+                                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-4 col-lg-2">
+                                <label class="form-label">单价</label>
+                                <input type="number" class="form-control" name="unitPrice" step="0.01" min="0"
+                                       value="0" required>
+                            </div>
+                            <div class="col-8 col-lg-3">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="note" maxlength="200" placeholder="选填">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>新增
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th>品名</th>
+                            <th style="width:100px">分类</th>
+                            <th style="width:110px">单价</th>
+                            <th style="width:100px">状态</th>
+                            <th style="width:420px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${items}">
+                            <td>
+                                <span th:text="${i.itemName}">矿泉水</span>
+                                <div th:if="${i.note}" class="text-muted-sm" th:text="${i.note}">—</div>
+                            </td>
+                            <td th:text="${i.category.label}">迷你吧</td>
+                            <td th:text="'￥' + ${#numbers.formatDecimal(i.unitPrice,1,'COMMA',2,'POINT')}">￥0.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.enabled} ? 'success' : 'secondary'"
+                                      th:text="${i.enabled} ? '上架' : '已下架'">上架</span>
+                            </td>
+                            <td>
+                                <form th:action="@{'/consumables/' + ${i.id} + '/update'}" method="post"
+                                      class="d-flex gap-1 flex-wrap align-items-center"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <input type="number" class="form-control form-control-sm" name="unitPrice"
+                                           step="0.01" min="0" th:value="${i.unitPrice}" style="width:96px">
+                                    <select class="form-select form-select-sm" name="enabled" style="width:92px">
+                                        <option value="true" th:selected="${i.enabled}">上架</option>
+                                        <option value="false" th:selected="${!i.enabled}">下架</option>
+                                    </select>
+                                    <input type="text" class="form-control form-control-sm" name="note"
+                                           th:value="${i.note}" placeholder="备注" style="width:130px">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">保存</button>
+                                </form>
+                                <form th:action="@{'/consumables/' + ${i.id} + '/delete'}" method="post"
+                                      class="d-inline" onsubmit="return confirm('确认删除该项目？')"
+                                      sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${items.isEmpty()}">
+                            <td colspan="5">
+                                <div class="empty-state"><i class="bi bi-list-ul"></i>还没有消费项目，先在上方新增</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 房间二维码 -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-qr-code me-2 text-primary"></i>房间二维码
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${rooms.size()} 间'">共 0 间</span>
+                    </h2>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted-sm">住客扫码即进入下单页，无需登录</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                            <i class="bi bi-printer me-1"></i>打印全部
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="qr-grid">
+                        <div class="qr-card" th:each="r : ${rooms}">
+                            <div class="qr-no" th:text="${r.roomNo}">8801</div>
+                            <img th:src="@{'/consumables/rooms/' + ${r.id} + '/qr.png'}" width="132" height="132"
+                                 alt="房间二维码" th:alt="'房间 ' + ${r.roomNo} + ' 二维码'">
+                            <div class="qr-link mono text-muted-sm"
+                                 th:text="${qrUrls.get(r.id)}">http://…/scan/…</div>
+                            <form th:action="@{'/consumables/rooms/' + ${r.id} + '/reset-token'}" method="post"
+                                  onsubmit="return confirm('重置后打印在房间里的旧二维码将立即失效，确认？')"
+                                  sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">重置二维码</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="empty-state" th:if="${rooms.isEmpty()}"><i class="bi bi-door-closed"></i>还没有客房</div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<style>
+    .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+    .qr-card { border: 1px solid #e6eaf2; border-radius: 12px; padding: 12px; text-align: center; background: #fff; }
+    .qr-no { font-size: 18px; font-weight: 500; margin-bottom: 6px; }
+    .qr-link { word-break: break-all; margin: 6px 0 8px; font-size: 11px; line-height: 1.4; }
+    @media print {
+        .app-sidebar, .app-topbar, .app-footer, .card-header .text-muted-sm, .btn { display: none !important; }
+        .app-content > .card:first-child { display: none !important; }
+        .qr-grid { grid-template-columns: repeat(4, 1fr); }
+        .qr-card { break-inside: avoid; page-break-inside: avoid; }
+    }
+</style>
+</body>
+</html>

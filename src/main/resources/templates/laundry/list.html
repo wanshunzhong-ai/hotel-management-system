@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('洗衣与布草')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('laundry')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('洗衣与布草', '客衣 / 布草收件 → 洗涤 → 送回；客衣费退房自动并入账单，布草送回自动回补库存')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="stat-grid mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-info"><i class="bi bi-inboxes"></i></div>
+                    <div>
+                        <div class="stat-label">已收件待洗</div>
+                        <div class="stat-value" th:text="${receivedCount}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-warning"><i class="bi bi-droplet-half"></i></div>
+                    <div>
+                        <div class="stat-label">洗涤中</div>
+                        <div class="stat-value" th:text="${washingCount}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-danger"><i class="bi bi-exclamation-triangle"></i></div>
+                    <div>
+                        <div class="stat-label">布草低于安全库存</div>
+                        <div class="stat-value" th:text="${linenBelowMin}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 收件登记 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-basket me-2 text-primary"></i>洗衣收件登记</h2>
+                    <div class="text-muted-sm">客衣按「单价 × 件数」计费并挂到在住订单；布草为内部周转，不计费</div>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/laundry}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">类别</label>
+                                <select class="form-select" name="category" id="laundryCategory">
+                                    <option th:each="c : ${categories}" th:value="${c}"
+                                            th:text="${c.label}" th:selected="${c.name() == 'GUEST'}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">房间</label>
+                                <select class="form-select" name="roomId">
+                                    <option value="">（布草可不选）</option>
+                                    <option th:each="r : ${inHouse}" th:value="${r.room.id}"
+                                            th:text="${r.room.roomNo} + ' · ' + ${r.customer.name}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">品名</label>
+                                <input type="text" class="form-control" name="itemName" required maxlength="100"
+                                       placeholder="如：衬衫 / 大浴巾">
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">件数</label>
+                                <input type="number" class="form-control" name="quantity" min="1" value="1">
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">单价</label>
+                                <input type="number" class="form-control" name="unitPrice" step="0.01" min="0" value="0">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="note" maxlength="200" placeholder="选填">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>收件
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 洗衣单列表 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-list-check me-2 text-primary"></i>洗衣单
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${orders.size()} + ' 条'">共 0 条</span>
+                    </h2>
+                    <form th:action="@{/laundry}" method="get" class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm" name="status" style="width:130px"
+                                onchange="this.form.submit()">
+                            <option value="">全部状态</option>
+                            <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                    th:selected="${status == s}"></option>
+                        </select>
+                    </form>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:110px">类别</th>
+                            <th style="width:90px">房间</th>
+                            <th>品名</th>
+                            <th style="width:70px">件数</th>
+                            <th style="width:100px">金额</th>
+                            <th style="width:100px">状态</th>
+                            <th style="width:90px">账单</th>
+                            <th style="width:110px">收件人</th>
+                            <th style="width:220px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="o : ${orders}">
+                            <td>
+                                <span class="badge-soft" th:classappend="${o.category.name() == 'GUEST'} ? 'primary' : 'secondary'"
+                                      th:text="${o.category.label}">客衣</span>
+                            </td>
+                            <td class="mono" th:text="${o.room == null ? '—' : o.room.roomNo}">—</td>
+                            <td>
+                                <div th:text="${o.itemName}">衬衫</div>
+                                <div th:if="${o.note}" class="text-muted-sm" th:text="${o.note}">—</div>
+                            </td>
+                            <td th:text="${o.quantity}">1</td>
+                            <td th:text="'￥' + ${#numbers.formatDecimal(o.amount,1,'COMMA',2,'POINT')}">￥0.00</td>
+                            <td><span class="badge-soft" th:classappend="${o.status.color}"
+                                      th:text="${o.status.label}">已收件</span></td>
+                            <td th:text="${o.billId == null ? '—' : '#' + o.billId}">—</td>
+                            <td th:text="${o.operator} ?: '—'">客房-王姐</td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <form th:if="${o.status.name() == 'RECEIVED'}"
+                                          th:action="@{'/laundry/' + ${o.id} + '/wash'}" method="post">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">开工洗涤</button>
+                                    </form>
+                                    <form th:if="${o.status.name() == 'RECEIVED' or o.status.name() == 'WASHING'}"
+                                          th:action="@{'/laundry/' + ${o.id} + '/return'}" method="post">
+                                        <button type="submit" class="btn btn-sm btn-success">标记送回</button>
+                                    </form>
+                                    <form th:if="${o.status.name() == 'RECEIVED' or o.status.name() == 'WASHING'}"
+                                          th:action="@{'/laundry/' + ${o.id} + '/cancel'}" method="post"
+                                          onsubmit="return confirm('确认取消该洗衣单？')">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">取消</button>
+                                    </form>
+                                    <span class="text-muted-sm" th:if="${o.status.name() == 'RETURNED'}"
+                                          th:text="${o.returnedAt == null ? '已送回' : #temporals.format(o.returnedAt,'MM-dd HH:mm') + ' 已送回'}">—</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${orders.isEmpty()}">
+                            <td colspan="9">
+                                <div class="empty-state"><i class="bi bi-basket"></i>暂无洗衣单</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 布草库存 -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-layers-half me-2 text-primary"></i>布草库存
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${linen.size()} + ' 个品名'">共 0 个品名</span>
+                    </h2>
+                    <div class="text-muted-sm">
+                        <i class="bi bi-info-circle me-1"></i>领用 = 在库→洗涤中；回库 = 洗涤中→在库；报废不可逆
+                    </div>
+                </div>
+
+                <div class="card-body" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                    <form th:action="@{/laundry/linen}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-3">
+                                <label class="form-label">品名</label>
+                                <input type="text" class="form-control" name="itemName" required maxlength="100"
+                                       placeholder="如：床单 / 大浴巾">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">品类</label>
+                                <select class="form-select" name="category">
+                                    <option th:each="c : ${linenCategories}" th:value="${c}" th:text="${c.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-4 col-lg-2">
+                                <label class="form-label">入库数量</label>
+                                <input type="number" class="form-control" name="inStock" min="0" value="0">
+                            </div>
+                            <div class="col-4 col-lg-2">
+                                <label class="form-label">安全库存</label>
+                                <input type="number" class="form-control" name="minStock" min="0" value="0">
+                            </div>
+                            <div class="col-4 col-lg-3">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i>新增 / 入库
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">品类</th>
+                            <th>品名</th>
+                            <th style="width:90px">在库</th>
+                            <th style="width:100px">洗涤中</th>
+                            <th style="width:90px">报废</th>
+                            <th style="width:110px">安全库存</th>
+                            <th style="width:300px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="s : ${linen}">
+                            <td th:text="${s.category.label}">床品</td>
+                            <td>
+                                <span th:text="${s.itemName}">床单</span>
+                                <span class="badge-soft danger ms-1" th:if="${s.belowMin}">低于安全库存</span>
+                                <div th:if="${s.note}" class="text-muted-sm" th:text="${s.note}">—</div>
+                            </td>
+                            <td>
+                                <b th:classappend="${s.belowMin} ? 'text-danger' : ''" th:text="${s.inStock}">0</b>
+                            </td>
+                            <td th:text="${s.inWash}">0</td>
+                            <td th:text="${s.scrapped}">0</td>
+                            <td th:text="${s.minStock}">0</td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <form th:action="@{'/laundry/linen/' + ${s.id} + '/issue'}" method="post"
+                                          class="d-flex gap-1">
+                                        <input type="number" class="form-control form-control-sm" name="quantity"
+                                               min="1" value="1" style="width:66px">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">领用</button>
+                                    </form>
+                                    <form th:action="@{'/laundry/linen/' + ${s.id} + '/back'}" method="post"
+                                          class="d-flex gap-1">
+                                        <input type="number" class="form-control form-control-sm" name="quantity"
+                                               min="1" value="1" style="width:66px">
+                                        <button type="submit" class="btn btn-sm btn-outline-success">回库</button>
+                                    </form>
+                                    <form th:action="@{'/laundry/linen/' + ${s.id} + '/scrap'}" method="post"
+                                          class="d-flex gap-1"
+                                          onsubmit="return confirm('报废不可逆，确认？')">
+                                        <input type="number" class="form-control form-control-sm" name="quantity"
+                                               min="1" value="1" style="width:66px">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">报废</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${linen.isEmpty()}">
+                            <td colspan="7">
+                                <div class="empty-state"><i class="bi bi-layers-half"></i>还没有布草库存记录</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

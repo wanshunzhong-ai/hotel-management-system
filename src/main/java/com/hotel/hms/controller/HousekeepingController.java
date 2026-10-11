@@ -6,6 +6,7 @@ import com.hotel.hms.entity.MinibarStatus;
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.TaskStatus;
 import com.hotel.hms.entity.TaskType;
+import com.hotel.hms.service.ConsumableService;
 import com.hotel.hms.service.HousekeepingService;
 import com.hotel.hms.service.MinibarService;
 import com.hotel.hms.service.ReservationService;
@@ -35,6 +36,7 @@ public class HousekeepingController {
 
     private final HousekeepingService housekeepingService;
     private final MinibarService minibarService;
+    private final ConsumableService consumableService;
     private final RoomService roomService;
     private final ReservationService reservationService;
 
@@ -116,6 +118,8 @@ public class HousekeepingController {
         List<Reservation> inHouse = reservationService.findInHouse();
         model.addAttribute("items", minibarService.list(status));
         model.addAttribute("inHouse", inHouse);
+        // 消费目录：前台快速选品，自动带出品名与单价（避免手输错价）
+        model.addAttribute("catalog", consumableService.enabledList());
         model.addAttribute("statuses", MinibarStatus.values());
         model.addAttribute("status", status);
         model.addAttribute("pendingCount", minibarService.countByStatus(MinibarStatus.PENDING));

@@ -42,6 +42,7 @@ public class BillService {
     private final SerialNumberService serialNumberService;
     private final OperationLogService operationLogService;
     private final MinibarService minibarService;
+    private final LaundryService laundryService;
 
     /**
      * 账单检索。
@@ -103,6 +104,8 @@ public class BillService {
         });
         // 客房部的迷你吧 / 客用品挂账：退房结账时自动并入账单其他消费（同一事务）
         minibarService.mergeIntoBill(bill.getReservation(), bill, operator);
+        // 客衣洗涤费同样在退房结账时并入（布草为内部周转，不计费）
+        laundryService.mergeIntoBill(bill.getReservation(), bill, operator);
         return bill;
     }
 

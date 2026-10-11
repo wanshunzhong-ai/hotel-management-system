@@ -72,6 +72,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+          第四批 B：房间二维码。只引 core（不引 javase），
+          BitMatrix 由 JDK 自带的 ImageIO 输出 PNG，避免带进 jai-imageio / jcommander。
+        -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

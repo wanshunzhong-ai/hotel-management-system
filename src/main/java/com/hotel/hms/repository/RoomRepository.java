@@ -18,6 +18,11 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 
     Optional<Room> findByRoomNo(String roomNo);
 
+    /** 扫码页用：按二维码令牌定位房间 */
+    Optional<Room> findByScanToken(String scanToken);
+
+    boolean existsByScanToken(String scanToken);
+
     /**
      * 加行级排他锁读取房间（第三批 §1.4 并发保护）。
      *

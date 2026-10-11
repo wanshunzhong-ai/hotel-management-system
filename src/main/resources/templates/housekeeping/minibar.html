@@ -29,17 +29,27 @@
                                 </select>
                             </div>
                             <div class="col-6 col-lg-2">
+                                <label class="form-label">从目录选</label>
+                                <select class="form-select" id="catalogPick">
+                                    <option value="">手动录入</option>
+                                    <option th:each="c : ${catalog}" th:value="${c.id}"
+                                            th:attr="data-name=${c.itemName},data-price=${c.unitPrice}"
+                                            th:text="${c.itemName} + '（￥' + ${c.unitPrice} + '）'"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
                                 <label class="form-label">品名</label>
-                                <input type="text" class="form-control" name="itemName" required maxlength="100"
-                                       placeholder="如：矿泉水">
+                                <input type="text" class="form-control" name="itemName" id="itemNameInput"
+                                       required maxlength="100" placeholder="如：矿泉水">
                             </div>
                             <div class="col-3 col-lg-1">
                                 <label class="form-label">数量</label>
                                 <input type="number" class="form-control" name="quantity" value="1" min="1">
                             </div>
-                            <div class="col-3 col-lg-2">
+                            <div class="col-3 col-lg-1">
                                 <label class="form-label">单价</label>
-                                <input type="number" class="form-control" name="unitPrice" step="0.01" min="0" value="0">
+                                <input type="number" class="form-control" name="unitPrice" id="unitPriceInput"
+                                       step="0.01" min="0" value="0">
                             </div>
                             <div class="col-12 col-lg-2">
                                 <label class="form-label">备注</label>
@@ -53,6 +63,7 @@
                         </div>
                         <div class="text-muted-sm mt-2">
                             只有「已入住」的房间可以挂账；中途取消请在下方列表里删除未入账记录。
+                            住客扫码自助下单的记录会以<b>「住客扫码」</b>来源出现在下方列表，同样可以在这里取消。
                         </div>
                     </form>
                 </div>
@@ -93,7 +104,8 @@
                             <th style="width:100px">单价</th>
                             <th style="width:110px">金额</th>
                             <th style="width:110px">状态</th>
-                            <th style="width:100px">账单</th>
+                            <th style="width:100px">来源</th>
+                            <th style="width:90px">账单</th>
                             <th style="width:100px">操作人</th>
                             <th style="width:130px">时间</th>
                             <th style="width:90px">操作</th>
@@ -111,6 +123,10 @@
                                 <span class="badge-soft" th:classappend="${i.status.color}"
                                       th:text="${i.status.label}">待入账</span>
                             </td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.sourceOrDefault.color}"
+                                      th:text="${i.sourceOrDefault.label}">前台录入</span>
+                            </td>
                             <td class="text-muted-sm mono"
                                 th:text="${i.billId == null ? '—' : '#' + i.billId}">—</td>
                             <td th:text="${i.operator} ?: '—'">客房-王姐</td>
@@ -125,7 +141,7 @@
                             </td>
                         </tr>
                         <tr th:if="${items.isEmpty()}">
-                            <td colspan="11">
+                            <td colspan="12">
                                 <div class="empty-state">
                                     <i class="bi bi-cup-straw"></i>暂无挂账记录
                                 </div>
@@ -140,5 +156,17 @@
     </div>
 </div>
 <div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    (function () {
+        var pick = document.getElementById('catalogPick');
+        if (!pick) return;
+        pick.addEventListener('change', function () {
+            var opt = pick.options[pick.selectedIndex];
+            if (!opt || !opt.value) return;
+            document.getElementById('itemNameInput').value = opt.getAttribute('data-name') || '';
+            document.getElementById('unitPriceInput').value = opt.getAttribute('data-price') || '0';
+        });
+    })();
+</script>
 </body>
 </html>

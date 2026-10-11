@@ -4,6 +4,7 @@ import com.hotel.hms.common.BusinessException;
 import com.hotel.hms.entity.Bill;
 import com.hotel.hms.entity.BillItem;
 import com.hotel.hms.entity.BillStatus;
+import com.hotel.hms.entity.ChargeSource;
 import com.hotel.hms.entity.MinibarItem;
 import com.hotel.hms.entity.MinibarStatus;
 import com.hotel.hms.entity.Reservation;
@@ -50,10 +51,21 @@ public class MinibarService {
         return minibarItemRepository.countByStatus(status);
     }
 
-    /** 在住挂账：必须是 CHECKED_IN 状态的订单所在房间 */
+    /** 在住挂账（前台录入） */
     @Transactional
     public Long create(Long roomId, String itemName, Integer quantity, BigDecimal unitPrice,
                        String note, String operator) {
+        return create(roomId, itemName, quantity, unitPrice, note, operator, ChargeSource.MANUAL);
+    }
+
+    /**
+     * 在住挂账（带来源）。
+     *
+     * @param source 录入来源；住客扫码走 {@link ChargeSource#SCAN}，前台录入为 {@link ChargeSource#MANUAL}
+     */
+    @Transactional
+    public Long create(Long roomId, String itemName, Integer quantity, BigDecimal unitPrice,
+                       String note, String operator, ChargeSource source) {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException("房间不存在"));
         if (itemName == null || itemName.isBlank()) {
@@ -79,10 +91,12 @@ public class MinibarService {
         item.setStatus(MinibarStatus.PENDING);
         item.setNote(note);
         item.setOperator(operator);
+        item.setSource(source == null ? ChargeSource.MANUAL : source);
         MinibarItem saved = minibarItemRepository.save(item);
         operationLogService.record("迷你吧挂账", "minibar_item", saved.getId(),
                 room.getRoomNo() + " · " + saved.getItemName() + " × " + qty
-                        + " = ￥" + saved.getAmount() + "（订单 " + saved.getReservation().getOrderNo() + "）",
+                        + " = ￥" + saved.getAmount() + "（来源：" + saved.getSourceOrDefault().getLabel()
+                        + "，订单 " + saved.getReservation().getOrderNo() + "）",
                 operator);
         return saved.getId();
     }

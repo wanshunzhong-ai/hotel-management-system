@@ -73,6 +73,19 @@ public class MinibarItem extends BaseEntity {
     @Column(length = 50)
     private String operator;
 
+    /**
+     * 录入来源：前台录入 / 住客扫码。
+     * <p>老数据该列为 NULL，展示时按「前台录入」兜底。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private ChargeSource source = ChargeSource.MANUAL;
+
+    /** 来源展示标签（NULL 兜底为前台录入） */
+    public ChargeSource getSourceOrDefault() {
+        return source == null ? ChargeSource.MANUAL : source;
+    }
+
     public void recalculate() {
         BigDecimal price = unitPrice == null ? BigDecimal.ZERO : unitPrice;
         int qty = quantity == null || quantity < 1 ? 1 : quantity;

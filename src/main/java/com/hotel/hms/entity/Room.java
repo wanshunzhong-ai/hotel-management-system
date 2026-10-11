@@ -52,6 +52,20 @@ public class Room extends BaseEntity {
     @Column(length = 200)
     private String remark;
 
+    /**
+     * 客房二维码令牌。扫码页 {@code /scan/{token}} 免登录可访问，
+     * 因此本值等同于一把「只能给这间房挂账」的钥匙：
+     * <ul>
+     *     <li>64 位随机串，不可枚举；</li>
+     *     <li>重新生成后旧二维码立即失效；</li>
+     *     <li>扫码本身不能凭空造账——房间必须真的有在住订单，否则挂账会被拒。</li>
+     * </ul>
+     * 老数据为 NULL，由 {@code DataInitializer} 启动时补发。
+     */
+    @Size(max = 64)
+    @Column(name = "scan_token", length = 64, unique = true)
+    private String scanToken;
+
     /** 展示用全称 */
     public String getDisplayName() {
         return roomNo + (roomType == null ? "" : " · " + roomType.getName());

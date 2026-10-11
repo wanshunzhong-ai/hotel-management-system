@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('查房评分')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('inspections')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('查房评分', '卫生 / 设施 / 布草 / 客用品 四项各 25 分；总分低于合格线自动派整改单并转「待清洁」')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="stat-grid mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-primary"><i class="bi bi-clipboard2-check"></i></div>
+                    <div>
+                        <div class="stat-label">平均分</div>
+                        <div class="stat-value" th:text="${averageScore}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-success"><i class="bi bi-hand-thumbs-up"></i></div>
+                    <div>
+                        <div class="stat-label">合格</div>
+                        <div class="stat-value" th:text="${passCount}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-danger"><i class="bi bi-exclamation-octagon"></i></div>
+                    <div>
+                        <div class="stat-label">不合格</div>
+                        <div class="stat-value" th:text="${failCount}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-clipboard2-plus me-2 text-primary"></i>登记一次查房</h2>
+                    <div class="text-muted-sm" th:text="'合格线 ' + ${passScore} + ' 分；不合格自动生成整改派工单'">合格线 80 分</div>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/inspections}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">房间</label>
+                                <select class="form-select" name="roomId" required>
+                                    <option value="">请选择</option>
+                                    <option th:each="r : ${rooms}" th:value="${r.id}"
+                                            th:text="${r.roomNo} + ' · ' + ${r.status.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">卫生</label>
+                                <input type="number" class="form-control" name="scoreHygiene"
+                                       min="0" max="25" value="25" required>
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">设施</label>
+                                <input type="number" class="form-control" name="scoreFacility"
+                                       min="0" max="25" value="25" required>
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">布草</label>
+                                <input type="number" class="form-control" name="scoreLinen"
+                                       min="0" max="25" value="25" required>
+                            </div>
+                            <div class="col-3 col-lg-1">
+                                <label class="form-label">客用品</label>
+                                <input type="number" class="form-control" name="scoreAmenity"
+                                       min="0" max="25" value="25" required>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">整改服务员</label>
+                                <select class="form-select" name="assigneeId">
+                                    <option value="">自动指派</option>
+                                    <option th:each="u : ${staff}" th:value="${u.id}" th:text="${u.realName}"></option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="remark" maxlength="500"
+                                       placeholder="如：地毯有污渍">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-check2-circle me-1"></i>提交评分
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-journal-check me-2 text-primary"></i>查房记录
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${inspections.size()} + ' 条'">共 0 条</span>
+                    </h2>
+                    <form th:action="@{/inspections}" method="get" class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm" name="result" style="width:130px"
+                                onchange="this.form.submit()">
+                            <option value="">全部结论</option>
+                            <option th:each="r : ${results}" th:value="${r}" th:text="${r.label}"
+                                    th:selected="${result == r}"></option>
+                        </select>
+                    </form>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房间</th>
+                            <th style="width:70px">卫生</th>
+                            <th style="width:70px">设施</th>
+                            <th style="width:70px">布草</th>
+                            <th style="width:80px">客用品</th>
+                            <th style="width:90px">总分</th>
+                            <th style="width:100px">结论</th>
+                            <th style="width:110px">整改单</th>
+                            <th>备注</th>
+                            <th style="width:100px">查房人</th>
+                            <th style="width:130px">时间</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${inspections}">
+                            <td class="mono" th:text="${i.room.roomNo}">8801</td>
+                            <td th:text="${i.scoreHygiene}">25</td>
+                            <td th:text="${i.scoreFacility}">25</td>
+                            <td th:text="${i.scoreLinen}">25</td>
+                            <td th:text="${i.scoreAmenity}">25</td>
+                            <td>
+                                <b th:text="${i.totalScore}">100</b>
+                                <span class="text-muted-sm" th:text="'（' + ${i.gradeLabel} + '）'">（优秀）</span>
+                            </td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.result.color}"
+                                      th:text="${i.result.label}">合格</span>
+                            </td>
+                            <td>
+                                <span th:if="${i.rectifiedTaskId != null}">
+                                    <a th:href="@{/housekeeping/tasks}" class="mono"
+                                       th:text="'#' + ${i.rectifiedTaskId}">#1</a>
+                                </span>
+                                <span th:if="${i.rectifiedTaskId == null}" class="text-muted-sm">—</span>
+                            </td>
+                            <td th:text="${i.remark} ?: '—'">—</td>
+                            <td th:text="${i.inspector} ?: '—'">客房-王姐</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${i.inspectedAt == null ? '—' : #temporals.format(i.inspectedAt,'MM-dd HH:mm')}">—</td>
+                        </tr>
+                        <tr th:if="${inspections.isEmpty()}">
+                            <td colspan="11">
+                                <div class="empty-state"><i class="bi bi-clipboard2-check"></i>还没有查房记录</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>
