@@ -28,3 +28,6 @@ logs/
 ### OS ###
 .DS_Store
 Thumbs.db
+
+### 本地临时脚本（含读取本机凭据的推送脚本，切勿入库）###
+.preview/
