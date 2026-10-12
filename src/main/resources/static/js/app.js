@@ -45,19 +45,6 @@
         });
     });
 
-    // 登录页演示账号快捷填充
-    document.querySelectorAll('.demo-chip[data-username]').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            const u = document.getElementById('username');
-            const p = document.getElementById('password');
-            if (u && p) {
-                u.value = chip.getAttribute('data-username');
-                p.value = chip.getAttribute('data-password');
-                u.focus();
-            }
-        });
-    });
-
     // 金额格式化
     window.formatMoney = function (value) {
         const n = Number(value || 0);

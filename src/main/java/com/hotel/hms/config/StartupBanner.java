@@ -77,6 +77,7 @@ public class StartupBanner implements ApplicationListener<ApplicationReadyEvent>
             sb.append("  演示账号    admin / admin123              （管理员）\n");
             sb.append("              reception / 123456            （前台）\n");
             sb.append("              housekeeping / 123456         （客房）\n");
+            sb.append("              supervisor / 123456           （客房主管）\n");
         }
 
         sb.append(LINE);
