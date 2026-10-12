@@ -92,6 +92,19 @@
                                         <div class="text-danger mt-1" style="font-size:12px"
                                              th:if="${#fields.hasErrors('guestCount')}" th:errors="*{guestCount}"></div>
                                     </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="ratePlanId">房价方案</label>
+                                        <select class="form-select" id="ratePlanId" th:field="*{ratePlanId}"
+                                                onchange="updateSummary()">
+                                            <option value="">门市价（不优惠）</option>
+                                            <option th:each="p : ${ratePlans}" th:value="${p.id}"
+                                                    th:text="${p.name} + ' · ' + ${p.discountLabel}"
+                                                    th:attr="data-fixed=${p.fixedPrice},data-rate=${p.discountRate}"></option>
+                                        </select>
+                                        <div class="text-muted-sm mt-1" style="font-size:12px">
+                                            协议价 / 会员价；选定客户为会员时会自动带出其等级的会员价
+                                        </div>
+                                    </div>
                                     <div class="col-12">
                                         <label class="form-label" for="remark">备注</label>
                                         <textarea class="form-control" id="remark" th:field="*{remark}" rows="2"
@@ -221,6 +234,11 @@
 </div>
 <div th:replace="~{fragments/layout :: scripts}"></div>
 
+<script th:inline="javascript">
+    // 会员等级 → 会员价方案 id，选定客户后自动带出对应会员价
+    window.__memberPlanIds = /*[[${memberPlanIds}]]*/ {};
+</script>
+
 <script>
     (function () {
         const checkIn = document.getElementById('checkInDate');
@@ -283,12 +301,28 @@
             updateSummary();
         }
 
+        /** 按所选房价方案折算单价：固定房价优先，其次折扣率，否则门市价 */
+        function effectiveUnit(listPrice) {
+            const planSel = document.getElementById('ratePlanId');
+            const opt = planSel && planSel.selectedOptions && planSel.selectedOptions[0];
+            if (!opt) return Number(listPrice);
+            const fixed = Number(opt.getAttribute('data-fixed') || 0);
+            const rate = Number(opt.getAttribute('data-rate') || 0);
+            if (fixed > 0) return Math.round(fixed * 100) / 100;
+            if (rate > 0) return Math.round(Number(listPrice) * rate * 100) / 100;
+            return Number(listPrice);
+        }
+
         function updateSummary() {
             const n = nights();
             const r = roomCache.find((x) => String(x.id) === String(roomSelect.value));
             if (n > 0 && r) {
-                const total = (n * Number(r.price)).toFixed(2);
-                summaryText.innerHTML = '共 <b>' + n + '</b> 晚 × ￥' + r.price + '/晚 ＝ 房费合计 <b>￥' + total + '</b>';
+                const unit = effectiveUnit(r.price);
+                const total = (n * unit).toFixed(2);
+                const planNote = unit < Number(r.price)
+                    ? ' <span class="badge-soft success">方案价</span> 门市价 ￥' + r.price + ' → ￥' + unit.toFixed(2) + '/晚'
+                    : '';
+                summaryText.innerHTML = '共 <b>' + n + '</b> 晚 × ￥' + unit.toFixed(2) + '/晚 ＝ 房费合计 <b>￥' + total + '</b>' + planNote;
                 summaryBox.style.display = '';
             } else {
                 summaryBox.style.display = 'none';
@@ -330,7 +364,18 @@
             inputId: 'customerSearch',
             hiddenId: 'customerId',
             listId: 'customerList',
-            clearId: 'customerClear'
+            clearId: 'customerClear',
+            // 选了会员客户就自动带出对应等级的会员价方案，前台不用记谁打几折
+            onSelect: function (c) {
+                const planSel = document.getElementById('ratePlanId');
+                if (!planSel || !c || !c.memberLevel) return;
+                const ids = window.__memberPlanIds || {};
+                const planId = ids[c.memberLevel];
+                if (planId) {
+                    planSel.value = String(planId);
+                    updateSummary();
+                }
+            }
         });
 
         // -------------------------------------- 内联新建客户（不离开本页）

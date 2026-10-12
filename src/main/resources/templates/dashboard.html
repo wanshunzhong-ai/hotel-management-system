@@ -38,7 +38,7 @@
                              th:text="'可售 ' + ${stats.sellableRooms} + ' 间 · 已售 ' + ${stats.soldRoomsToday} + ' 间'">—</div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                     <div class="stat-icon bg-soft-warning"><i class="bi bi-cash-coin"></i></div>
                     <div>
                         <div class="stat-value" th:text="'￥' + ${#numbers.formatDecimal(stats.todayRevenue, 1, 'COMMA', 0, 'POINT')}">￥0</div>
@@ -65,7 +65,7 @@
                         <div class="stat-hint">待办理退房</div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                     <div class="stat-icon bg-soft-warning"><i class="bi bi-receipt-cutoff"></i></div>
                     <div>
                         <div class="stat-value" th:text="${stats.unsettledBills}">0</div>
@@ -74,7 +74,7 @@
                              th:text="'在住预计房费 ￥' + ${#numbers.formatDecimal(stats.inHouseExpectedRoomAmount, 1, 'COMMA', 0, 'POINT')}">—</div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                     <div class="stat-icon bg-soft-primary"><i class="bi bi-people"></i></div>
                     <div>
                         <div class="stat-value" th:text="${stats.totalCustomers}">0</div>
@@ -84,8 +84,8 @@
                 </div>
             </div>
 
-            <!-- 图表区 -->
-            <div class="row g-3 mb-4">
+            <!-- 图表区：营收趋势与房型分布都属经营视角，客房部的看板只留房态与待办 -->
+            <div class="row g-3 mb-4" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                 <div class="col-lg-8">
                     <div class="card h-100">
                         <div class="card-header">
@@ -114,7 +114,9 @@
                 <h2 class="mb-0" style="font-size:15px">
                     <i class="bi bi-list-check me-2 text-primary"></i>今日待办
                 </h2>
-                <a th:href="@{/dashboard/print/today}" class="btn btn-sm btn-outline-secondary">
+                <!-- 交接班名单含全店客人手机号，只给管理员与前台（第八批缺口 3） -->
+                <a th:href="@{/dashboard/print/today}" class="btn btn-sm btn-outline-secondary"
+                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                     <i class="bi bi-printer me-1"></i>打印交接班名单
                 </a>
             </div>
@@ -172,7 +174,7 @@
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <strong th:text="${r.customer.name}">客户</strong>
-                                        <span class="money text-danger"
+                                        <span class="money text-danger" sec:authorize="hasAnyRole('ADMIN','RECEPTION')"
                                               th:text="'￥' + ${#numbers.formatDecimal(r.roomAmount, 1, 'COMMA', 0, 'POINT')}">￥0</span>
                                     </div>
                                     <div class="text-muted-sm mt-1">
@@ -230,53 +232,61 @@
 </div>
 <div th:replace="~{fragments/layout :: scripts}"></div>
 
+<!-- 营收趋势的数据与初始化只发给管理员/前台：客房部的页面源码里也不该出现营收数字 -->
+<th:block sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        const revenueLabels = /*[[${stats.revenueLabels}]]*/ [];
+        const revenueValues = /*[[${stats.revenueValues}]]*/ [];
+        /*]]>*/
+
+        const ctx1 = document.getElementById('revenueChart');
+        if (ctx1) {
+            const grad = ctx1.getContext('2d').createLinearGradient(0, 0, 0, 220);
+            grad.addColorStop(0, 'rgba(37,99,235,.85)');
+            grad.addColorStop(1, 'rgba(37,99,235,.35)');
+            new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: revenueLabels,
+                    datasets: [{
+                        label: '营收',
+                        data: revenueValues,
+                        backgroundColor: grad,
+                        borderRadius: 7,
+                        maxBarThickness: 38
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ' 营收 ' + window.formatMoney(c.parsed.y)
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#eef1f6' },
+                            ticks: { callback: (v) => '￥' + v }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+    </script>
+</th:block>
+
 <script th:inline="javascript">
     /*<![CDATA[*/
-    const revenueLabels = /*[[${stats.revenueLabels}]]*/ [];
-    const revenueValues = /*[[${stats.revenueValues}]]*/ [];
     const typeLabels = /*[[${stats.roomTypeLabels}]]*/ [];
     const typeValues = /*[[${stats.roomTypeValues}]]*/ [];
     /*]]>*/
-
-    const ctx1 = document.getElementById('revenueChart');
-    if (ctx1) {
-        const grad = ctx1.getContext('2d').createLinearGradient(0, 0, 0, 220);
-        grad.addColorStop(0, 'rgba(37,99,235,.85)');
-        grad.addColorStop(1, 'rgba(37,99,235,.35)');
-        new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels: revenueLabels,
-                datasets: [{
-                    label: '营收',
-                    data: revenueValues,
-                    backgroundColor: grad,
-                    borderRadius: 7,
-                    maxBarThickness: 38
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (c) => ' 营收 ' + window.formatMoney(c.parsed.y)
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: '#eef1f6' },
-                        ticks: { callback: (v) => '￥' + v }
-                    },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
-    }
 
     const ctx2 = document.getElementById('roomTypeChart');
     if (ctx2) {

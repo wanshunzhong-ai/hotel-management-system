@@ -27,9 +27,11 @@ import java.util.List;
  * <h3>金额口径（第三批统一后）</h3>
  * <pre>
  *   实际房费 roomAmount      = 房价 × 实际住夜数（提前离店已重算，见 §1.5）
+ *   延迟退房加收             = 房价 × 档位倍数（第六批，属房费侧）
  *   其他消费 otherAmount     = 消费明细求和
  *   人工折扣 discountAmount  = 协议价 / 抹零（§2.6）
- *   应收合计 totalAmount     = roomAmount + otherAmount − discountAmount
+ *   应收合计 totalAmount     = roomAmount + lateCheckoutFee + otherAmount − discountAmount
+ *   押金 deposit             = 收款流水的预收款净额（第六批起不再由前台手填）
  *   结账门禁                 = 押金 + 本次收款 ≥ totalAmount
  * </pre>
  */
@@ -43,6 +45,7 @@ public class BillService {
     private final OperationLogService operationLogService;
     private final MinibarService minibarService;
     private final LaundryService laundryService;
+    private final PaymentService paymentService;
 
     /**
      * 账单检索。
@@ -71,6 +74,12 @@ public class BillService {
                 .orElseThrow(() -> new BusinessException("该订单还没有生成账单"));
     }
 
+    /** 未结账单上出现过的挂账单位清单（应收账款登记的候选下拉） */
+    @Transactional(readOnly = true)
+    public List<String> listCreditAccounts() {
+        return billRepository.findCreditAccounts();
+    }
+
     /**
      * 退房时自动生成账单。
      *
@@ -84,6 +93,7 @@ public class BillService {
                     .orElseThrow(() -> new BusinessException("预订单不存在"));
 
             BigDecimal roomAmount = reservation.getActualRoomAmount();
+            BigDecimal lateFee = nvl(reservation.getLateCheckoutFee());
 
             Bill created = new Bill();
             created.setBillNo(serialNumberService.nextBillNo());
@@ -94,7 +104,8 @@ public class BillService {
             created.setOtherAmount(BigDecimal.ZERO);
             created.setDiscountAmount(BigDecimal.ZERO);
             created.setEarlyCheckoutDiscount(reservation.getEarlyCheckoutDiscount());
-            created.setTotalAmount(roomAmount);
+            created.setLateCheckoutFee(lateFee);
+            created.setTotalAmount(roomAmount.add(lateFee));
             created.setDeposit(BigDecimal.ZERO);
             created.setPaidAmount(BigDecimal.ZERO);
             created.setRefundAmount(BigDecimal.ZERO);
@@ -168,7 +179,7 @@ public class BillService {
         BigDecimal before = nvl(bill.getDiscountAmount());
         // 注意：不能用 totalAmount < 0 来判断超额——recalculate() 会把合计钳到 0，
         // 负数判断永远不成立（曾导致 999999 的折扣被静默接受）。这里直接按上限比。
-        BigDecimal cap = nvl(bill.getRoomAmount()).add(otherAmountOf(bill));
+        BigDecimal cap = nvl(bill.getRoomAmount()).add(nvl(bill.getLateCheckoutFee())).add(otherAmountOf(bill));
         if (value.compareTo(cap) > 0) {
             throw new BusinessException("折扣金额不能超过「房费 + 其他消费」（最多 ￥" + money(cap) + "）");
         }
@@ -187,15 +198,44 @@ public class BillService {
         return bill;
     }
 
+    /**
+     * 登记 / 修改挂账单位与约定回款日（第六批：应收账款台账）。
+     *
+     * <p>未结账单若由协议单位月结，在这里登记单位名称。配合账单上的账龄与
+     * {@link Bill#isOverdue()} 构成应收账款台账；结清后账单转「已结账」，自然从台账消失。
+     *
+     * @param account 挂账单位；传空表示取消挂账登记（转回散客欠款）
+     * @param dueDate 约定回款日，可为空
+     */
+    @Transactional
+    public Bill registerCredit(Long billId, String account, LocalDate dueDate, String operator) {
+        Bill bill = getDetail(billId);
+        assertUnpaid(bill);
+        String name = account == null || account.isBlank() ? null : account.trim();
+        if (name != null && name.length() > 100) {
+            throw new BusinessException("挂账单位名称过长（最多 100 字）");
+        }
+        String before = bill.getCreditAccount();
+        bill.setCreditAccount(name);
+        bill.setCreditDueDate(dueDate);
+        Bill saved = billRepository.save(bill);
+        operationLogService.record(name == null ? "取消挂账登记" : "登记应收账款", "bill", saved.getId(),
+                saved.getBillNo() + " / " + (name == null ? "已清除挂账单位" : name
+                        + " / 到期 " + (dueDate == null ? "未约定" : dueDate)
+                        + " / 应收 ￥" + money(saved.getTotalAmount()))
+                        + (before == null ? "" : "（原 " + before + "）"), operator);
+        return saved;
+    }
+
     /** 结账 */
     @Transactional
     public Bill settle(Long billId, CheckoutForm form, String operator) {
         Bill bill = getDetail(billId);
         assertUnpaid(bill);
 
-        BigDecimal deposit = nvl(form.getDeposit());
+        BigDecimal formDeposit = nvl(form.getDeposit());
         BigDecimal paid = nvl(form.getPaidAmount());
-        if (deposit.signum() < 0 || paid.signum() < 0) {
+        if (formDeposit.signum() < 0 || paid.signum() < 0) {
             throw new BusinessException("押金与收款金额不能为负数");
         }
         if (form.getPayMethod() == null || form.getPayMethod().isBlank()) {
@@ -210,6 +250,11 @@ public class BillService {
 
         recalculate(bill);
 
+        // 押金以收款流水为准（第六批）。表单里填得更高时按「补录」处理，
+        // 兼容系统上线前就已入住、没有押金流水的存量订单。
+        BigDecimal deposit = paymentService.syncDepositAtSettle(
+                bill.getReservation(), formDeposit, payMethod, operator);
+
         // 收款必须足额：押金 + 本次收款 >= 应收合计。否则拒绝结账，
         // 避免生成"已结账但仍欠款"且被 assertUnpaid 永久锁死的账单。
         BigDecimal received = deposit.add(paid);
@@ -221,10 +266,11 @@ public class BillService {
                     + "。如客人暂时无法付清，请先保留账单为「待结账」状态。");
         }
 
+        BigDecimal refund = received.subtract(total);
         bill.setDeposit(deposit);
         bill.setPaidAmount(paid);
         bill.setPayMethod(payMethod);
-        bill.setRefundAmount(received.subtract(total));
+        bill.setRefundAmount(refund);
         bill.setStatus(BillStatus.SETTLED);
         bill.setSettledAt(LocalDateTime.now());
         bill.setOperator(operator);
@@ -237,6 +283,8 @@ public class BillService {
                     : bill.getRemark() + "；" + note);
         }
         Bill saved = billRepository.save(bill);
+        // 收款落流水：交接班对账与押金台账都基于这张表
+        paymentService.recordSettlement(saved, paid, refund, payMethod, operator);
         operationLogService.record("结账", "bill", saved.getId(),
                 saved.getBillNo() + " / 应收 ￥" + money(total) + " / 收款 ￥" + money(received)
                         + " / 应退 ￥" + money(saved.getRefundAmount())
@@ -276,17 +324,23 @@ public class BillService {
         bill.setOperator(operator);
         Bill saved = billRepository.save(bill);
 
+        // 清掉本次结账产生的收款流水（结账收款 / 找零 / 结算时退还的押金），
+        // 否则重结后流水会重复累计，交接班对账跟着虚高。
+        paymentService.clearSettlement(saved.getId());
+
         operationLogService.record("反结账", "bill", saved.getId(),
                 saved.getBillNo() + " / 原因：" + (reason == null || reason.isBlank() ? "未填写" : reason)
                         + " / " + summary, operator);
         return saved;
     }
 
-    /** 重新计算合计：应收 = 房费 + 其他消费 − 折扣（不为负） */
-    private void recalculate(Bill bill) {
+    /** 重新计算合计：应收 = 房费 + 延迟退房加收 + 其他消费 − 折扣（不为负） */    private void recalculate(Bill bill) {
         BigDecimal other = otherAmountOf(bill);
         bill.setOtherAmount(other);
-        BigDecimal total = nvl(bill.getRoomAmount()).add(other).subtract(nvl(bill.getDiscountAmount()));
+        BigDecimal total = nvl(bill.getRoomAmount())
+                .add(nvl(bill.getLateCheckoutFee()))
+                .add(other)
+                .subtract(nvl(bill.getDiscountAmount()));
         bill.setTotalAmount(total.max(BigDecimal.ZERO));
     }
 

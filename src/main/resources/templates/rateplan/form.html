@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${editing} ? '编辑房价方案' : '新建房价方案')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('rate-plans')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar(${editing} ? '编辑房价方案' : '新建房价方案', '折扣率与固定房价至少填一项，固定房价优先')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="bi bi-tags me-2 text-primary"></i>方案信息</h2>
+                            <a th:href="@{/rate-plans}" class="btn btn-sm btn-outline-secondary">返回列表</a>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/rate-plans/save}" method="post">
+                                <input type="hidden" name="id" th:if="${editing}" th:value="${plan.id}">
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="code">方案编码</label>
+                                        <input type="text" class="form-control" id="code" name="code" required
+                                               maxlength="30" th:value="${plan.code}"
+                                               placeholder="如 CORP-YUNQI / MEMBER-GOLD">
+                                        <div class="text-muted-sm mt-1">唯一标识，建议大写英文 + 短横线</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required" for="name">方案名称</label>
+                                        <input type="text" class="form-control" id="name" name="name" required
+                                               maxlength="60" th:value="${plan.name}"
+                                               placeholder="如 云企公司协议价 / 金卡会员价">
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label required" for="type">方案类型</label>
+                                        <select class="form-select" id="type" name="type" onchange="syncType()">
+                                            <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"
+                                                    th:selected="${plan.type != null && plan.type == t}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4" id="memberLevelWrap">
+                                        <label class="form-label" for="memberLevel">适用会员等级</label>
+                                        <select class="form-select" id="memberLevel" name="memberLevel">
+                                            <option value="">（不按等级匹配）</option>
+                                            <option th:each="lv : ${memberLevels}" th:value="${lv}" th:text="${lv}"
+                                                    th:selected="${plan.memberLevel == lv}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="enabled">状态</label>
+                                        <select class="form-select" id="enabled" name="enabled">
+                                            <option value="true" th:selected="${plan.enabled == null || plan.enabled}">启用</option>
+                                            <option value="false" th:selected="${plan.enabled != null && !plan.enabled}">停用</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="discountRate">折扣率</label>
+                                        <input type="number" step="0.0001" min="0" max="1" class="form-control"
+                                               id="discountRate" name="discountRate" oninput="preview()"
+                                               th:value="${plan.discountRate}" placeholder="0.85 表示 8.5 折">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="fixedPrice">固定房价（元/晚）</label>
+                                        <input type="number" step="0.01" min="0" class="form-control"
+                                               id="fixedPrice" name="fixedPrice" oninput="preview()"
+                                               th:value="${plan.fixedPrice}" placeholder="如 328.00">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">优惠预览</label>
+                                        <div class="form-control bg-light" id="preview" style="background:#f8fafc">—</div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label" for="note">说明</label>
+                                        <input type="text" class="form-control" id="note" name="note"
+                                               maxlength="200" th:value="${plan.note}"
+                                               placeholder="如：与云启科技签订年度协议，标准房 8 折">
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 mt-3">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-check2 me-1"></i>保存方案
+                                    </button>
+                                    <a th:href="@{/rate-plans}" class="btn btn-outline-secondary">取消</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="bi bi-info-circle me-2 text-primary"></i>计价规则</h2></div>
+                        <div class="card-body text-muted-sm" style="line-height:2">
+                            <p class="mb-2">计价优先级：<b>固定房价 &gt; 折扣率 &gt; 门市价</b>。</p>
+                            <p class="mb-2">只填折扣率时，实际房价 = 房型门市价 × 折扣率。</p>
+                            <p class="mb-2">只填固定房价时，不看房型门市价，一律按该价计。</p>
+                            <p class="mb-2"><b>会员价</b>必须选择适用等级，系统才能按客户的会员等级自动匹配。</p>
+                            <p class="mb-0">下单时未选方案，则按门市价计价，与不使用本功能时完全一致。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    function syncType() {
+        const type = document.getElementById('type').value;
+        // 会员价必须绑定等级，其它类型下把等级栏灰掉，避免建出「永不匹配」的会员价
+        document.getElementById('memberLevelWrap').style.display = type === 'MEMBER' ? '' : 'none';
+        preview();
+    }
+
+    function preview() {
+        const rate = document.getElementById('discountRate').value;
+        const fixed = document.getElementById('fixedPrice').value;
+        const out = document.getElementById('preview');
+        if (Number(fixed) > 0) {
+            out.textContent = '固定 ￥' + Number(fixed).toFixed(2) + ' / 晚';
+        } else if (Number(rate) > 0) {
+            const tenths = (Number(rate) * 10);
+            out.textContent = (Math.round(tenths * 100) / 100) + ' 折（门市价 × ' + rate + '）';
+        } else {
+            out.textContent = '未配置优惠';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        syncType();
+        preview();
+    });
+</script>
+</body>
+</html>

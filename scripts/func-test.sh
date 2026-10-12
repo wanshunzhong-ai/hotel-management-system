@@ -107,7 +107,10 @@ echo "=============================================="
 T=$(grep -o 'name="_csrf"[^>]*value="[^"]*"' "$TMP/rlist2.html" | head -1 | sed 's/.*value="//;s/"//')
 post_form "$BASE/reservations/$NEWID/checkin" "$CJ" "$T" > /dev/null
 curl -s -b "$CJ" "$BASE/reservations/$NEWID" -o "$TMP/rd.html"
-chk "订单详情显示【已入住】" "$(grep -c '已入住' "$TMP/rd.html")" "1"
+# 断言的是「订单状态徽章」显示已入住（CHECKED_IN 对应的颜色类是 danger，全枚举唯一）。
+# 不能用整页 grep -c '已入住'：订单详情页的「换房」房间选择器会列出候选房间的**房态**，
+# 在住房间同样带「已入住」字样，整页计数必然 > 1（不是页面出错，是断言口径太粗）。
+chk "订单详情显示【已入住】" "$(grep -c 'badge-soft ms-2 danger">已入住' "$TMP/rd.html")" "1"
 curl -s -b "$CJ" "$BASE/rooms/board" -o "$TMP/b0.html"
 chk "房态图出现【已入住】房间" "$([ "$(grep -c 'OCCUPIED' "$TMP/b0.html")" -gt 0 ] && echo yes || echo no)" "yes"
 

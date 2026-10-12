@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('派工单详情')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('housekeeping')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('派工单详情', '按清洁标准逐项打勾；全部打勾后才能提交完成，主管再验收')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <a th:href="@{/housekeeping/tasks}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回列表
+                </a>
+                <div class="d-flex gap-2">
+                    <form th:if="${canMarkDone and (task.status.name() == 'PENDING' or task.status.name() == 'REJECTED')}"
+                          th:action="@{'/housekeeping/tasks/' + ${task.id} + '/done'}" method="post">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-check2-circle me-1"></i>标记完成
+                        </button>
+                    </form>
+                    <span th:if="${task.status.name() == 'DONE'}" class="badge-soft info align-self-center">已提交，等待验收</span>
+                    <span th:if="${task.status.name() == 'APPROVED'}" class="badge-soft success align-self-center">验收通过</span>
+                    <span th:if="${task.status.name() == 'REJECTED'}" class="badge-soft danger align-self-center">被打回，需重做</span>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-lg-5">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h2><i class="bi bi-door-closed me-2 text-primary"></i>派工信息</h2>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless mb-0">
+                                <tbody>
+                                <tr><th style="width:110px" class="text-muted-sm">单号</th>
+                                    <td class="mono" th:text="'#' + ${task.id}">#1</td></tr>
+                                <tr><th class="text-muted-sm">房间</th>
+                                    <td><a th:href="@{'/hk/room/' + ${task.room.id}}" class="mono"
+                                           th:text="${task.room.displayName}">8801</a></td></tr>
+                                <tr><th class="text-muted-sm">任务类型</th>
+                                    <td th:text="${task.type.label} + '（' + ${task.type.description} + '）'">走客房</td></tr>
+                                <tr><th class="text-muted-sm">服务员</th><td th:text="${task.assignee.realName}">—</td></tr>
+                                <tr><th class="text-muted-sm">派工备注</th><td th:text="${task.remark} ?: '—'">—</td></tr>
+                                <tr><th class="text-muted-sm">派出时间</th>
+                                    <td class="mono" th:text="${#temporals.format(task.createdAt,'yyyy-MM-dd HH:mm')}">—</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="bi bi-clock-history me-2 text-primary"></i>流程时间线</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="timeline-item">
+                                <span class="timeline-dot dot-primary"></span>
+                                <div>
+                                    <div>派工</div>
+                                    <div class="text-muted-sm mono"
+                                         th:text="${#temporals.format(task.createdAt,'MM-dd HH:mm')}">—</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <span class="timeline-dot"
+                                      th:classappend="${task.doneAt != null} ? 'dot-success' : 'dot-secondary'"></span>
+                                <div>
+                                    <div>服务员标记完成</div>
+                                    <div class="text-muted-sm mono"
+                                         th:text="${task.doneAt == null ? '待完成' : #temporals.format(task.doneAt,'MM-dd HH:mm')}">—</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <span class="timeline-dot"
+                                      th:classappend="${task.inspectedAt != null} ? (${task.status.name() == 'APPROVED'} ? 'dot-success' : 'dot-danger') : 'dot-secondary'"></span>
+                                <div>
+                                    <div>验收</div>
+                                    <div class="text-muted-sm" th:if="${task.inspectedAt == null}">待验收</div>
+                                    <div class="text-muted-sm" th:unless="${task.inspectedAt == null}">
+                                        <span th:text="${task.inspector} + ' · ' + ${#temporals.format(task.inspectedAt,'MM-dd HH:mm')}">—</span>
+                                        <span class="text-danger" th:if="${task.inspectRemark}"
+                                              th:text="'（' + ${task.inspectRemark} + '）'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-7">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-card-checklist me-2 text-primary"></i>清洁标准检查单
+                                <span class="badge-soft ms-2"
+                                      th:classappend="${progress[1] > 0 and progress[0] >= progress[1]} ? 'success' : 'secondary'"
+                                      th:text="${progress[0]} + ' / ' + ${progress[1]}">0 / 0</span>
+                            </h2>
+                            <div class="d-flex gap-2" th:if="${!records.isEmpty()}">
+                                <form th:action="@{'/housekeeping/tasks/' + ${task.id} + '/checklist/all'}" method="post">
+                                    <input type="hidden" name="checked" value="true">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-check2-all me-1"></i>一键全勾
+                                    </button>
+                                </form>
+                                <form th:action="@{'/housekeeping/tasks/' + ${task.id} + '/checklist/all'}" method="post">
+                                    <input type="hidden" name="checked" value="false">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">全部清空</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="card-body py-2">
+                            <div th:if="${records.isEmpty()}" class="empty-state">
+                                <i class="bi bi-card-checklist"></i>当前没有适用的检查项（可在「清洁标准」中维护）
+                            </div>
+                            <div th:each="r : ${records}" class="checklist-row"
+                                 th:classappend="${r.checked} ? 'checked'">
+                                <form th:action="@{'/housekeeping/tasks/' + ${task.id} + '/checklist'}" method="post">
+                                    <input type="hidden" name="recordId" th:value="${r.id}">
+                                    <input type="hidden" name="checked" th:value="${!r.checked}">
+                                    <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="点击切换">
+                                        <i class="bi"
+                                           th:classappend="${r.checked} ? 'bi-check-square-fill text-success' : 'bi-square text-muted'"
+                                           style="font-size:18px"></i>
+                                    </button>
+                                </form>
+                                <div class="cl-name">
+                                    <div th:text="${r.itemName}">检查项</div>
+                                    <div class="cl-meta" th:if="${r.checked}">
+                                        <span th:text="${r.checkedBy}">—</span> ·
+                                        <span th:text="${#temporals.format(r.checkedAt,'MM-dd HH:mm')}">—</span>
+                                    </div>
+                                </div>
+                                <span class="badge-soft secondary" th:text="${r.category.label}">卫生</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" th:if="${canDispatch and task.status.name() == 'DONE'}">
+                        <div class="card-header">
+                            <h2><i class="bi bi-patch-check me-2 text-primary"></i>验收</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{'/housekeeping/tasks/' + ${task.id} + '/inspect'}" method="post">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-12 col-lg-7">
+                                        <label class="form-label">验收备注（打回必填）</label>
+                                        <input type="text" class="form-control" name="inspectRemark" maxlength="200"
+                                               placeholder="如：浴缸没刷干净，请重做">
+                                    </div>
+                                    <div class="col-6 col-lg-2">
+                                        <button type="submit" name="action" value="approve"
+                                                class="btn btn-success w-100">
+                                            <i class="bi bi-check2 me-1"></i>通过
+                                        </button>
+                                    </div>
+                                    <div class="col-6 col-lg-3">
+                                        <button type="submit" name="action" value="reject"
+                                                class="btn btn-outline-danger w-100">打回重做</button>
+                                    </div>
+                                </div>
+                                <p class="text-muted-sm mt-2 mb-0">
+                                    验收通过后，若房间当前为「待清洁」会自动转为「空闲」，立即可售。
+                                </p>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

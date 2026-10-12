@@ -155,7 +155,8 @@
                                     <select class="form-select form-select-sm room-status-select" name="status"
                                             onchange="this.form.submit()">
                                         <option value="" selected disabled>改房态</option>
-                                        <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"></option>
+                                        <!-- 已入住不在此列：它是办理入住的结果，不能由改房态产生（第八批缺口 6） -->
+                                        <option th:each="s : ${changeableStatuses}" th:value="${s}" th:text="${s.label}"></option>
                                     </select>
                                 </form>
                             </div>

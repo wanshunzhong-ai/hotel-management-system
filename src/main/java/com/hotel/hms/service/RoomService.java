@@ -187,6 +187,11 @@ public class RoomService {
         if (status == null || !status.isPhysical()) {
             throw new BusinessException("请选择房态");
         }
+        // 「已入住」是办理入住的结果，不能由改房态凭空产生（第八批缺口 6）：
+        // 否则空房被标成已入住后没有订单支撑，既失真又吃掉可售房量
+        if (!status.isChangeable()) {
+            throw new BusinessException("「" + status.getLabel() + "」不能通过变更房态设置，已入住请办理入住");
+        }
         if (db.getStatus() == RoomStatus.OCCUPIED && status != RoomStatus.CLEANING) {
             throw new BusinessException("在住房间需先办理退房才能变更房态");
         }

@@ -2,6 +2,8 @@ package com.hotel.hms.config;
 
 import com.hotel.hms.entity.Bill;
 import com.hotel.hms.entity.BillStatus;
+import com.hotel.hms.entity.ChecklistCategory;
+import com.hotel.hms.entity.ChecklistItem;
 import com.hotel.hms.entity.ConsumableCategory;
 import com.hotel.hms.entity.ConsumableItem;
 import com.hotel.hms.entity.Customer;
@@ -10,23 +12,31 @@ import com.hotel.hms.entity.IdType;
 import com.hotel.hms.entity.LinenCategory;
 import com.hotel.hms.entity.LinenStock;
 import com.hotel.hms.entity.PayMethod;
+import com.hotel.hms.entity.RatePlan;
+import com.hotel.hms.entity.RatePlanType;
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.ReservationStatus;
 import com.hotel.hms.entity.Role;
 import com.hotel.hms.entity.Room;
 import com.hotel.hms.entity.RoomStatus;
 import com.hotel.hms.entity.RoomType;
+import com.hotel.hms.entity.SupplyCategory;
+import com.hotel.hms.entity.TaskType;
 import com.hotel.hms.entity.User;
 import com.hotel.hms.repository.BillRepository;
+import com.hotel.hms.repository.ChecklistItemRepository;
 import com.hotel.hms.repository.ConsumableItemRepository;
 import com.hotel.hms.repository.CustomerRepository;
 import com.hotel.hms.repository.LinenStockRepository;
+import com.hotel.hms.repository.RatePlanRepository;
 import com.hotel.hms.repository.ReservationRepository;
 import com.hotel.hms.repository.RoomRepository;
 import com.hotel.hms.repository.RoomTypeRepository;
+import com.hotel.hms.repository.SupplyItemRepository;
 import com.hotel.hms.repository.UserRepository;
 import com.hotel.hms.service.ConsumableService;
 import com.hotel.hms.service.SerialNumberService;
+import com.hotel.hms.service.SupplyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,7 +67,11 @@ public class DataInitializer implements CommandLineRunner {
     private final BillRepository billRepository;
     private final LinenStockRepository linenStockRepository;
     private final ConsumableItemRepository consumableItemRepository;
+    private final RatePlanRepository ratePlanRepository;
+    private final ChecklistItemRepository checklistItemRepository;
+    private final SupplyItemRepository supplyItemRepository;
     private final ConsumableService consumableService;
+    private final SupplyService supplyService;
     private final SerialNumberService serialNumberService;
     private final PasswordEncoder passwordEncoder;
 
@@ -71,6 +85,9 @@ public class DataInitializer implements CommandLineRunner {
         migrateLegacyRoomStatus();
         seedLinenStock();
         seedConsumables();
+        seedRatePlans();
+        seedChecklistItems();
+        seedSupplies();
         int issued = consumableService.ensureRoomTokens();
         if (issued > 0) {
             log.info("已为 {} 间未发放二维码的房间补发扫码令牌。", issued);
@@ -103,9 +120,44 @@ public class DataInitializer implements CommandLineRunner {
         log.info("客房消费目录已建立（9 个项目，其中 1 个默认下架）。");
     }
 
+    /**
+     * 房价方案基础数据（幂等：已有任何一条就跳过）。
+     *
+     * <p>与演示客户一起构成「协议价 / 会员价」的可用样例：演示客户的会员等级覆盖
+     * 银卡 / 金卡 / 钻石，下单时选定客户即可自动带出对应等级的会员价。
+     */
+    private void seedRatePlans() {
+        if (ratePlanRepository.count() > 0) {
+            return;
+        }
+        seedRatePlan("CORP-YUNQI", "云启科技协议价", RatePlanType.CORPORATE,
+                new BigDecimal("0.80"), null, null, "与云启科技签订年度协议，全房型 8 折");
+        seedRatePlan("MEMBER-SILVER", "银卡会员价", RatePlanType.MEMBER,
+                new BigDecimal("0.95"), null, "银卡", "银卡会员全房型 9.5 折");
+        seedRatePlan("MEMBER-GOLD", "金卡会员价", RatePlanType.MEMBER,
+                new BigDecimal("0.90"), null, "金卡", "金卡会员全房型 9 折");
+        seedRatePlan("MEMBER-DIAMOND", "钻石会员价", RatePlanType.MEMBER,
+                new BigDecimal("0.85"), null, "钻石", "钻石会员全房型 8.5 折");
+        log.info("房价方案基础数据已建立（1 个协议价 + 3 个会员价）。");
+    }
+
+    private void seedRatePlan(String code, String name, RatePlanType type,
+                              BigDecimal discountRate, BigDecimal fixedPrice,
+                              String memberLevel, String note) {
+        RatePlan plan = new RatePlan();
+        plan.setCode(code);
+        plan.setName(name);
+        plan.setType(type);
+        plan.setDiscountRate(discountRate);
+        plan.setFixedPrice(fixedPrice);
+        plan.setMemberLevel(memberLevel);
+        plan.setEnabled(true);
+        plan.setNote(note);
+        ratePlanRepository.save(plan);
+    }
+
     private void seedConsumable(String name, ConsumableCategory category, String price,
-                                String note, boolean enabled) {
-        ConsumableItem item = new ConsumableItem();
+                                String note, boolean enabled) {        ConsumableItem item = new ConsumableItem();
         item.setItemName(name);
         item.setCategory(category);
         item.setUnitPrice(new BigDecimal(price));
@@ -145,6 +197,87 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
+     * 清洁标准检查单模板（幂等：已有任何一条就跳过）。
+     *
+     * <p>模板分两类：<b>通用项</b>（taskType 为空，所有房都适用）与
+     * <b>专用项</b>（只对走客房 / 深度清洁生效）。派工单创建时按任务类型取适用条目，
+     * 生成该单的执行清单。
+     */
+    private void seedChecklistItems() {
+        if (checklistItemRepository.count() > 0) {
+            return;
+        }
+        int order = 0;
+        // ---- 通用：卫生 ----
+        seedChecklist("更换床品与枕套", ChecklistCategory.HYGIENE, null, order++, "床单、被套、枕套全套更换");
+        seedChecklist("清洁卫浴（马桶 / 面盆 / 淋浴）", ChecklistCategory.HYGIENE, null, order++, "含除垢与消毒");
+        seedChecklist("地面吸尘并拖净", ChecklistCategory.HYGIENE, null, order++, "含床底与角落");
+        seedChecklist("擦拭桌面、床头与家具", ChecklistCategory.HYGIENE, null, order++, "不留水渍与浮尘");
+        // ---- 通用：设施 ----
+        seedChecklist("检查灯具与开关", ChecklistCategory.FACILITY, null, order++, "含床头灯与阅读灯");
+        seedChecklist("检查空调与遥控器", ChecklistCategory.FACILITY, null, order++, "制冷正常、遥控有电");
+        seedChecklist("检查门锁、猫眼与防盗链", ChecklistCategory.FACILITY, null, order++, "反锁功能正常");
+        // ---- 通用：布草 ----
+        seedChecklist("补充浴巾、面巾、地巾", ChecklistCategory.LINEN, null, order++, "按房型标准配置数量");
+        seedChecklist("检查布草无破损与污渍", ChecklistCategory.LINEN, null, order++, "有瑕必换");
+        // ---- 通用：客用品 ----
+        seedChecklist("补充六小件（牙具 / 梳子 / 剃须刀 / 浴帽 / 拖鞋 / 护理包）",
+                ChecklistCategory.AMENITY, null, order++, "按标准配齐");
+        seedChecklist("补充矿泉水与茶饮", ChecklistCategory.AMENITY, null, order++, "缺一补一");
+        seedChecklist("清空垃圾桶并更换垃圾袋", ChecklistCategory.AMENITY, null, order++, "含卫生间与书桌桶");
+        // ---- 走客房专用 ----
+        seedChecklist("检查客人遗留物品", ChecklistCategory.OTHER, TaskType.CHECKOUT, order++,
+                "发现即登记失物招领");
+        // ---- 深度清洁专用 ----
+        seedChecklist("清洗窗帘与床垫除螨", ChecklistCategory.HYGIENE, TaskType.DEEP, order++, "深度保洁");
+        seedChecklist("清洗空调滤网", ChecklistCategory.FACILITY, TaskType.DEEP, order++, "拆洗后复位");
+        log.info("清洁标准检查单模板已建立（{} 项，含走客房与深度清洁专用项）。", checklistItemRepository.count());
+    }
+
+    private void seedChecklist(String itemName, ChecklistCategory category, TaskType taskType,
+                               int sortOrder, String note) {
+        ChecklistItem item = new ChecklistItem();
+        item.setItemName(itemName);
+        item.setCategory(category);
+        item.setTaskType(taskType);
+        item.setSortOrder(sortOrder);
+        item.setEnabled(true);
+        item.setNote(note);
+        checklistItemRepository.save(item);
+    }
+
+    /**
+     * 客房耗材台账基础数据（幂等：已有任何一条就跳过）。
+     *
+     * <p>走 {@link SupplyService#createItem} 而不是直接写仓库，
+     * 是为了让「建档」同时留下一条入库流水——否则台账第一笔库存从哪来就成了无头案。
+     */
+    private void seedSupplies() {
+        if (supplyItemRepository.count() > 0) {
+            return;
+        }
+        seedSupply("牙具套装", SupplyCategory.AMENITY, "套", 100, 30, "2.50");
+        seedSupply("梳子", SupplyCategory.AMENITY, "把", 120, 40, "1.20");
+        seedSupply("剃须刀", SupplyCategory.AMENITY, "套", 80, 30, "2.00");
+        seedSupply("浴帽", SupplyCategory.AMENITY, "个", 60, 20, "0.80");
+        seedSupply("一次性拖鞋", SupplyCategory.AMENITY, "双", 200, 60, "3.50");
+        seedSupply("护理包（棉签 / 指甲锉）", SupplyCategory.AMENITY, "套", 50, 20, "1.50");
+        seedSupply("洁厕剂", SupplyCategory.CLEANING, "瓶", 24, 10, "12.00");
+        seedSupply("多功能清洁剂", SupplyCategory.CLEANING, "瓶", 30, 12, "15.00");
+        seedSupply("84 消毒液", SupplyCategory.CLEANING, "瓶", 20, 8, "18.00");
+        seedSupply("卷纸", SupplyCategory.PAPER, "卷", 300, 80, "1.80");
+        seedSupply("抽纸", SupplyCategory.PAPER, "盒", 150, 50, "4.50");
+        seedSupply("洗衣粉", SupplyCategory.LAUNDRY, "袋", 20, 8, "25.00");
+        log.info("客房耗材台账已建立（{} 个品名）。", supplyItemRepository.count());
+    }
+
+    private void seedSupply(String name, SupplyCategory category, String unit,
+                            int stock, int minStock, String unitCost) {
+        supplyService.createItem(name, category, unit, stock, minStock,
+                new BigDecimal(unitCost), "初始化账套", "系统");
+    }
+
+    /**
      * 房态语义收敛的一次性数据迁移（第三批 §1.1）。
      *
      * <p>旧实现把「未来有预订」也写进 {@code room.status}，导致房间当前明显空着
@@ -168,6 +301,7 @@ public class DataInitializer implements CommandLineRunner {
         createIfAbsent("admin", "admin123", "系统管理员", Role.ADMIN, "13800000001");
         createIfAbsent("reception", "123456", "前台-小林", Role.RECEPTION, "13800000002");
         createIfAbsent("housekeeping", "123456", "客房-王姐", Role.HOUSEKEEPING, "13800000003");
+        createIfAbsent("supervisor", "123456", "客房主管-李领班", Role.HOUSEKEEPING_SUPERVISOR, "13800000004");
     }
 
     private void createIfAbsent(String username, String rawPassword, String realName, Role role, String phone) {

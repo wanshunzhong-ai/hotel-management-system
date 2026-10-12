@@ -8,8 +8,11 @@ import com.hotel.hms.dto.CheckoutForm;
 import com.hotel.hms.entity.Bill;
 import com.hotel.hms.entity.BillItem;
 import com.hotel.hms.entity.BillStatus;
+import com.hotel.hms.entity.InvoiceType;
 import com.hotel.hms.entity.PayMethod;
 import com.hotel.hms.service.BillService;
+import com.hotel.hms.service.InvoiceService;
+import com.hotel.hms.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -64,6 +67,8 @@ public class BillController {
     }
 
     private final BillService billService;
+    private final InvoiceService invoiceService;
+    private final PaymentService paymentService;
 
     @GetMapping
     public String list(@RequestParam(required = false) String keyword,
@@ -111,8 +116,18 @@ public class BillController {
         Bill bill = billService.getDetail(id);
         model.addAttribute("bill", bill);
         model.addAttribute("payMethods", PayMethod.values());
+        // 押金默认取收款流水净额（第六批）：账单押金以流水为准，不再由前台凭记忆手填
+        BigDecimal ledger = paymentService.prepaymentNet(bill.getReservation().getId());
+        model.addAttribute("ledgerDeposit", ledger);
         model.addAttribute("suggestedPaid",
-                bill.getTotalAmount().subtract(bill.getDeposit()).max(BigDecimal.ZERO));
+                bill.getTotalAmount().subtract(ledger).max(BigDecimal.ZERO));
+        // 发票（第六批）：已开票额、可开额度与开票记录
+        model.addAttribute("invoices", invoiceService.listByBill(id));
+        model.addAttribute("issuedAmount", invoiceService.issuedAmount(id));
+        model.addAttribute("remainingAmount", invoiceService.remainingAmount(id));
+        model.addAttribute("invoiceTypes", InvoiceType.values());
+        // 应收账款（第六批）：挂账单位候选
+        model.addAttribute("creditAccounts", billService.listCreditAccounts());
         model.addAttribute("active", "bills");
         return "bill/detail";
     }

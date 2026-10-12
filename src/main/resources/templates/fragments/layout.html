@@ -27,19 +27,49 @@
         <a th:href="@{/dashboard}" class="nav-link-item" th:classappend="${active == 'dashboard'} ? 'active'">
             <i class="bi bi-speedometer2"></i><span>数据看板</span>
         </a>
+        <a th:href="@{/todos}" class="nav-link-item" th:classappend="${active == 'todos'} ? 'active'">
+            <i class="bi bi-bell"></i><span>待办中心</span>
+            <span class="nav-badge" th:if="${todoCount != null and todoCount > 0}" th:text="${todoCount}">0</span>
+        </a>
 
         <div class="nav-section">前台业务</div>
         <a th:href="@{/reservations}" class="nav-link-item" th:classappend="${active == 'reservations'} ? 'active'"
            sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
             <i class="bi bi-journal-text"></i><span>预订管理</span>
         </a>
+        <a th:href="@{/groups/checkin}" class="nav-link-item" th:classappend="${active == 'groups'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-people-fill"></i><span>团队入住</span>
+        </a>
         <a th:href="@{/bills}" class="nav-link-item" th:classappend="${active == 'bills'} ? 'active'"
            sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
             <i class="bi bi-receipt"></i><span>账单结算</span>
         </a>
+        <a th:href="@{/payments}" class="nav-link-item" th:classappend="${active == 'payments'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-cash-stack"></i><span>收款流水</span>
+        </a>
+        <a th:href="@{/invoices}" class="nav-link-item" th:classappend="${active == 'invoices'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-receipt-cutoff"></i><span>发票管理</span>
+        </a>
+        <a th:href="@{/receivables}" class="nav-link-item" th:classappend="${active == 'receivables'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-journal-check"></i><span>应收账款</span>
+        </a>
+        <a th:href="@{/shift}" class="nav-link-item" th:classappend="${active == 'shift'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-arrow-left-right"></i><span>交接班对账</span>
+        </a>
         <a th:href="@{/customers}" class="nav-link-item" th:classappend="${active == 'customers'} ? 'active'"
            sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
             <i class="bi bi-people"></i><span>客户档案</span>
+        </a>
+
+        <div class="nav-section">价格与政策</div>
+        <a th:href="@{/rate-plans}" class="nav-link-item" th:classappend="${active == 'rate-plans'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+            <i class="bi bi-tags"></i><span>房价方案</span>
         </a>
 
         <div class="nav-section">房态管理</div>
@@ -49,12 +79,26 @@
         <a th:href="@{/board}" class="nav-link-item" th:classappend="${active == 'bigboard'} ? 'active'">
             <i class="bi bi-display"></i><span>房态大屏</span>
         </a>
+        <a th:href="@{/hk}" class="nav-link-item" th:classappend="${active == 'hk'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-phone"></i><span>现场上报</span>
+        </a>
 
         <div class="nav-section">客房服务</div>
         <a th:href="@{/housekeeping/tasks}" class="nav-link-item"
            th:classappend="${active == 'housekeeping'} ? 'active'"
            sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
             <i class="bi bi-brush"></i><span>派工与验收</span>
+        </a>
+        <a th:href="@{/housekeeping/schedule}" class="nav-link-item"
+           th:classappend="${active == 'schedule'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+            <i class="bi bi-calendar-week"></i><span>排班与工作量</span>
+        </a>
+        <a th:href="@{/checklists}" class="nav-link-item"
+           th:classappend="${active == 'checklists'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-card-checklist"></i><span>清洁标准</span>
         </a>
         <a th:href="@{/inspections}" class="nav-link-item"
            th:classappend="${active == 'inspections'} ? 'active'"
@@ -66,9 +110,19 @@
            sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
             <i class="bi bi-cup-straw"></i><span>迷你吧挂账</span>
         </a>
+        <a th:href="@{/supplies}" class="nav-link-item"
+           th:classappend="${active == 'supplies'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
+            <i class="bi bi-box-seam"></i><span>耗材出入库</span>
+        </a>
         <a th:href="@{/laundry}" class="nav-link-item" th:classappend="${active == 'laundry'} ? 'active'"
            sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING')">
             <i class="bi bi-basket"></i><span>洗衣与布草</span>
+        </a>
+        <a th:href="@{/laundry/outsourcing}" class="nav-link-item"
+           th:classappend="${active == 'outsourcing'} ? 'active'"
+           sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+            <i class="bi bi-truck"></i><span>布草外送</span>
         </a>
         <a th:href="@{/consumables}" class="nav-link-item"
            th:classappend="${active == 'consumables'} ? 'active'"

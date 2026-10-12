@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('房间操作台')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('hk')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房间操作台', '站在房间门口就能完成报修、登记失物、挂账与改房态')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <a th:href="@{/hk}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回
+                </a>
+                <span class="badge-soft" th:classappend="${room.status.color}"
+                      th:text="${room.status.label}">空闲</span>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body text-center">
+                    <div class="console-room-no mono" th:text="${room.roomNo}">8801</div>
+                    <div class="text-muted-sm mt-1" th:text="${room.displayName}">标准大床房</div>
+                    <div class="mt-2" th:if="${inHouse != null}">
+                        <span class="badge-soft danger">在住</span>
+                        <span th:text="${inHouse.customer.name} + ' · ' + ${inHouse.orderNo}">客人</span>
+                    </div>
+                    <div class="mt-2" th:if="${inHouse == null}">
+                        <span class="badge-soft secondary">空房</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-toggle-on me-2 text-primary"></i>房态快捷切换</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <form th:each="s : ${physicalStatuses}"
+                              th:if="${s != room.status}"
+                              th:action="@{'/hk/room/' + ${room.id} + '/status'}" method="post">
+                            <input type="hidden" name="status" th:value="${s}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi" th:classappend="${s.icon}"></i>
+                                <span th:text="'置为' + ${s.label}">置为空闲</span>
+                            </button>
+                        </form>
+                    </div>
+                    <p class="text-muted-sm mt-2 mb-0">
+                        「已入住」由办理入住产生，不能在这里设置；在住房间只能置为「待清洁」（需先办理退房），存在有效订单的房间不能置为「维修中」。
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-3" th:if="${!myTasks.isEmpty()}">
+                <div class="card-header">
+                    <h2><i class="bi bi-brush me-2 text-primary"></i>本房待办工单</h2>
+                </div>
+                <div class="card-body">
+                    <div th:each="t : ${myTasks}" class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <span class="badge-soft" th:classappend="${t.status.color}"
+                                  th:text="${t.status.label}">待完成</span>
+                            <span th:text="${t.type.label}">走客房</span>
+                            <span class="text-muted-sm" th:text="${t.remark} ?: ''">备注</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a th:href="@{'/housekeeping/tasks/' + ${t.id}}"
+                               class="btn btn-sm btn-outline-primary">检查单</a>
+                            <form th:action="@{'/hk/room/' + ${room.id} + '/task-done'}" method="post">
+                                <input type="hidden" name="taskId" th:value="${t.id}">
+                                <button type="submit" class="btn btn-sm btn-primary">完成</button>
+                            </form>
+                        </div>
+                    </div>
+                    <p class="text-muted-sm mb-0">
+                        点「完成」要求检查单已逐项打勾；没打勾会提示先去检查单页面。
+                    </p>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-tools me-2 text-primary"></i>报修</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{'/hk/room/' + ${room.id} + '/report'}" method="post">
+                                <div class="mb-2">
+                                    <textarea class="form-control" name="description" rows="3" maxlength="500"
+                                              required placeholder="如：淋浴下水慢，怀疑地漏堵塞"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-send me-1"></i>提交报修
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-search-heart me-2 text-primary"></i>拾遗登记</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{'/hk/room/' + ${room.id} + '/found'}" method="post">
+                                <div class="mb-2">
+                                    <input type="text" class="form-control" name="itemName" maxlength="100" required
+                                           placeholder="物品名称，如 黑色雨伞">
+                                </div>
+                                <div class="mb-2">
+                                    <input type="text" class="form-control" name="description" maxlength="300"
+                                           placeholder="特征描述（选填）">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-journal-plus me-1"></i>登记失物
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2><i class="bi bi-cup-straw me-2 text-primary"></i>挂账（并入账单）</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{'/hk/room/' + ${room.id} + '/minibar'}" method="post">
+                                <div class="mb-2">
+                                    <input type="text" class="form-control" name="itemName" maxlength="100" required
+                                           list="catalog-list" placeholder="品名">
+                                    <datalist id="catalog-list">
+                                        <option th:each="c : ${catalog}" th:value="${c.itemName}"
+                                                th:text="${c.itemName} + ' ￥' + ${c.unitPrice}"></option>
+                                    </datalist>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <input type="number" class="form-control" name="quantity" min="1" value="1"
+                                               placeholder="数量">
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="number" step="0.01" class="form-control" name="unitPrice" min="0"
+                                               placeholder="单价">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>挂账
+                                </button>
+                            </form>
+                            <div class="mt-2" th:if="${!pendingItems.isEmpty()}">
+                                <div class="text-muted-sm">本房待入账：</div>
+                                <div th:each="m : ${pendingItems}" class="text-muted-sm"
+                                     th:text="'· ' + ${m.itemName} + ' × ' + ${m.quantity} + ' = ￥' + ${m.amount}">·</div>
+                            </div>
+                            <p class="text-muted-sm mt-2 mb-0" th:if="${inHouse == null}">
+                                该房当前无在住订单，挂账会被拒绝——这是防止空房凭空造账。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-qr-code me-2 text-primary"></i>员工码</h2>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印
+                    </button>
+                </div>
+                <div class="card-body d-flex align-items-center gap-3">
+                    <img th:src="@{'/consumables/rooms/' + ${room.id} + '/staff-qr.png'}"
+                         width="120" height="120" alt="员工码"
+                         th:alt="'房间 ' + ${room.roomNo} + ' 员工码'">
+                    <div>
+                        <div>把这枚员工码贴在房内工作区（衣柜内侧 / 床头柜后）。</div>
+                        <div class="text-muted-sm">
+                            与房间住客码共用同一把令牌，重置一次两张同时失效；
+                            员工码<b>需要登录</b>，住客扫码只会被带到登录页。
+                        </div>
+                        <div class="mono text-muted-sm mt-1" th:text="'/hk/scan/' + ${token}">/hk/scan/…</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 迷你吧 / 客用品挂账服务。
@@ -101,17 +102,36 @@ public class MinibarService {
         return saved.getId();
     }
 
-    /** 取消未入账的挂账 */
+    /**
+     * 取消未入账的挂账。
+     *
+     * <p>撤销挂账等于往客人账单里退钱，因此收两道口子：
+     * <ul>
+     *     <li><b>必须填原因</b>——原因随操作日志一起留痕，事后能追溯为什么退；</li>
+     *     <li><b>只能撤自己的</b>——{@code allowOther} 为 false 时（客房部）只能撤销本人录入的挂账，
+     *         要撤别人录入的得找管理员或前台，避免随手抹掉别人记的消费。</li>
+     * </ul>
+     *
+     * @param reason     撤销原因，必填
+     * @param allowOther 是否允许撤销他人录入的挂账（管理员 / 前台为 true）
+     */
     @Transactional
-    public void delete(Long id, String operator) {
+    public void delete(Long id, String reason, boolean allowOther, String operator) {
         MinibarItem item = minibarItemRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("挂账记录不存在"));
         if (item.getStatus() != MinibarStatus.PENDING) {
             throw new BusinessException("已并入账单的挂账不能删除");
         }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("请填写撤销原因");
+        }
+        if (!allowOther && !Objects.equals(item.getOperator(), operator)) {
+            throw new BusinessException("只能撤销本人录入的挂账，如确需撤销请联系管理员或前台");
+        }
+        String detail = item.getRoom().getRoomNo() + " · " + item.getItemName() + " × " + item.getQuantity()
+                + "（撤销原因：" + reason.trim() + "）";
         minibarItemRepository.delete(item);
-        operationLogService.record("迷你吧取消", "minibar_item", id,
-                item.getRoom().getRoomNo() + " · " + item.getItemName() + " × " + item.getQuantity(), operator);
+        operationLogService.record("迷你吧取消", "minibar_item", id, detail, operator);
     }
 
     /**

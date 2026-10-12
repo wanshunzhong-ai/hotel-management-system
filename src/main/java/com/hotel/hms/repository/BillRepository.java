@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +67,58 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     /** 详情查询，一次性抓取消费明细 */
     @Query("select distinct b from Bill b left join fetch b.items where b.id = :id")
     Optional<Bill> findDetailById(@Param("id") Long id);
+
+    /**
+     * 应收账款台账：未结账单（第六批）。
+     *
+     * @param account     指定挂账单位，可为 null
+     * @param creditedOnly 只看已登记挂账单位的
+     * @param overdueOnly  只看已过约定回款日的
+     * @param today        逾期判断基准日
+     */
+    @Query("""
+            select b from Bill b
+            where b.status = com.hotel.hms.entity.BillStatus.UNPAID
+              and (:keyword is null
+                   or b.billNo like concat('%', :keyword, '%')
+                   or b.customer.name like concat('%', :keyword, '%')
+                   or b.room.roomNo like concat('%', :keyword, '%')
+                   or b.creditAccount like concat('%', :keyword, '%'))
+              and (:account is null or b.creditAccount = :account)
+              and (:creditedOnly = false or b.creditAccount is not null)
+              and (:overdueOnly = false
+                   or (b.creditDueDate is not null and b.creditDueDate < :today))
+            """)
+    Page<Bill> searchReceivables(@Param("keyword") String keyword,
+                                 @Param("account") String account,
+                                 @Param("creditedOnly") boolean creditedOnly,
+                                 @Param("overdueOnly") boolean overdueOnly,
+                                 @Param("today") LocalDate today,
+                                 Pageable pageable);
+
+    /** 未结账单的挂账单位清单（筛选下拉用） */
+    @Query("""
+            select distinct b.creditAccount from Bill b
+            where b.creditAccount is not null
+              and b.status = com.hotel.hms.entity.BillStatus.UNPAID
+            order by b.creditAccount asc
+            """)
+    List<String> findCreditAccounts();
+
+    /** 应收账款总额（未结账单应收合计） */
+    @Query("""
+            select coalesce(sum(b.totalAmount), 0) from Bill b
+            where b.status = com.hotel.hms.entity.BillStatus.UNPAID
+            """)
+    BigDecimal sumUnpaidTotal();
+
+    /** 逾期应收总额 */
+    @Query("""
+            select coalesce(sum(b.totalAmount), 0) from Bill b
+            where b.status = com.hotel.hms.entity.BillStatus.UNPAID
+              and b.creditDueDate is not null and b.creditDueDate < :today
+            """)
+    BigDecimal sumOverdueTotal(@Param("today") LocalDate today);
 
     /**
      * 账单列表查询（分页 + 多条件筛选）。

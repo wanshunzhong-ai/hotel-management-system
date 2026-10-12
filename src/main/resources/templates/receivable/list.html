@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('应收账款')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('receivables')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('应收账款台账', '未结账单即应收，按账龄排序、逾期高亮')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="stat-grid mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-primary"><i class="bi bi-journal-check"></i></div>
+                    <div>
+                        <div class="stat-label">未结账单</div>
+                        <div class="stat-value" th:text="${unpaidCount}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-warning"><i class="bi bi-cash-stack"></i></div>
+                    <div>
+                        <div class="stat-label">应收合计</div>
+                        <div class="stat-value"
+                             th:text="'￥' + ${#numbers.formatDecimal(totalUnpaid, 1, 'COMMA', 2, 'POINT')}">￥0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-danger"><i class="bi bi-exclamation-octagon"></i></div>
+                    <div>
+                        <div class="stat-label">其中已逾期</div>
+                        <div class="stat-value" style="color:#d63341"
+                             th:text="'￥' + ${#numbers.formatDecimal(totalOverdue, 1, 'COMMA', 2, 'POINT')}">￥0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/receivables}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="账单号 / 客户 / 房号 / 单位" style="width:210px">
+                        </div>
+                        <div>
+                            <label class="form-label">挂账单位</label>
+                            <select class="form-select" name="account" style="width:180px">
+                                <option value="">全部单位</option>
+                                <option th:each="a : ${accounts}" th:value="${a}" th:text="${a}"
+                                        th:selected="${account == a}"></option>
+                            </select>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="creditedOnly"
+                                   name="creditedOnly" value="true" th:checked="${creditedOnly}"
+                                   onchange="this.form.submit()">
+                            <label class="form-check-label" for="creditedOnly">仅挂账</label>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="overdueOnly"
+                                   name="overdueOnly" value="true" th:checked="${overdueOnly}"
+                                   onchange="this.form.submit()">
+                            <label class="form-check-label" for="overdueOnly">仅逾期</label>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/receivables}" class="btn btn-outline-secondary">重置</a>
+                        <a th:href="@{/receivables/export(keyword=${keyword}, account=${account},
+                                                          creditedOnly=${creditedOnly}, overdueOnly=${overdueOnly})}"
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-download me-1"></i>导出 CSV
+                        </a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-journal-check me-2 text-primary"></i>应收明细
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${page.totalElements} + ' 单'">—</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:130px">账单号</th>
+                            <th>客户</th>
+                            <th style="width:80px">房间</th>
+                            <th style="width:120px">退房时间</th>
+                            <th class="text-end" style="width:110px">应收</th>
+                            <th class="text-end" style="width:100px">已收押金</th>
+                            <th style="width:150px">挂账单位</th>
+                            <th style="width:110px">约定回款</th>
+                            <th style="width:90px">账龄</th>
+                            <th style="width:120px" class="text-end">登记</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="b : ${page.content}" th:style="${b.overdue} ? 'background:#fff5f5' : ''">
+                            <td>
+                                <a class="mono" th:href="@{/bills/{id}(id=${b.id})}" th:text="${b.billNo}">BL—</a>
+                                <div class="text-muted-sm" th:text="${b.reservation.orderNo}">—</div>
+                            </td>
+                            <td>
+                                <div th:text="${b.customer.name}">—</div>
+                                <div class="text-muted-sm mono" th:text="${b.customer.phone}">—</div>
+                            </td>
+                            <td class="mono" th:text="${b.room.roomNo}">201</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${b.reservation.checkOutTime == null ? '未退房'
+                                          : #temporals.format(b.reservation.checkOutTime,'yyyy-MM-dd HH:mm')}">—</td>
+                            <td class="text-end money fw-bold"
+                                th:text="'￥' + ${#numbers.formatDecimal(b.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td class="text-end money text-muted-sm"
+                                th:text="'￥' + ${#numbers.formatDecimal(b.deposit, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td>
+                                <span class="badge-soft primary" th:if="${b.credited}"
+                                      th:text="${b.creditAccount}">—</span>
+                                <span class="text-muted-sm" th:unless="${b.credited}">散客欠款</span>
+                            </td>
+                            <td>
+                                <span th:if="${b.creditDueDate != null}" th:text="${b.creditDueDate}"
+                                      th:classappend="${b.overdue} ? 'text-danger fw-bold'">—</span>
+                                <span class="text-muted-sm" th:if="${b.creditDueDate == null}">未约定</span>
+                            </td>
+                            <td>
+                                <span th:text="${b.agingDays} + ' 天'">—</span>
+                                <span class="badge-soft danger ms-1" th:if="${b.overdue}">逾期</span>
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        th:attr="data-bs-toggle='modal', data-bs-target='#creditModal' + ${b.id}">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr th:if="${page.totalElements == 0}">
+                            <td colspan="10">
+                                <div class="empty-state"><i class="bi bi-journal-check"></i>没有符合条件的应收账单</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+
+<!-- 挂账登记弹窗（每单一个） -->
+<th:block th:each="b : ${page.content}" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+    <div class="modal fade" th:id="'creditModal' + ${b.id}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form th:action="@{/receivables/{id}/credit(id=${b.id})}" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-journal-check me-2"></i>登记应收账款</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-muted-sm mb-3">
+                            账单 <span class="mono" th:text="${b.billNo}">—</span> ·
+                            应收 <b th:text="'￥' + ${#numbers.formatDecimal(b.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</b>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label required" th:for="'acct' + ${b.id}">挂账单位</label>
+                            <input type="text" class="form-control" th:id="'acct' + ${b.id}"
+                                   name="creditAccount" maxlength="100" th:value="${b.creditAccount}"
+                                   placeholder="如 云启科技有限公司（留空表示取消挂账）">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" th:for="'due' + ${b.id}">约定回款日</label>
+                            <input type="date" class="form-control" th:id="'due' + ${b.id}"
+                                   name="creditDueDate"
+                                   th:value="${b.creditDueDate == null ? '' : b.creditDueDate}">
+                            <div class="text-muted-sm mt-1">留空表示未约定；填了之后逾期末收会在台账高亮。</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2 me-1"></i>保存登记
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</th:block>
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

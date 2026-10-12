@@ -18,6 +18,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,7 +84,28 @@ public class Bill extends BaseEntity {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal deposit = BigDecimal.ZERO;
 
-    /** 应收合计 = 房费 + 其他消费 − 折扣 */
+    /**
+     * 延迟退房加收（第六批）。
+     * <p>属于<b>房费侧</b>加收（不是消费明细），计入应收合计。
+     * 为什么单独开字段而不是塞进消费明细：加收的性质是房费，混进「其他消费」会让
+     * 房费口径（ADR 等）失真，也无法在报表里单独统计。
+     */
+    @Column(name = "late_checkout_fee", nullable = false, precision = 12, scale = 2)
+    private BigDecimal lateCheckoutFee = BigDecimal.ZERO;
+
+    /**
+     * 挂账单位 / 应收账款方（第六批）。
+     * <p>未结账单若由协议单位月结，在这里登记单位名称，配合 {@link #creditDueDate}
+     * 构成应收账款台账；结清后账单转「已结账」，自然从台账中消失。
+     */
+    @Column(name = "credit_account", length = 100)
+    private String creditAccount;
+
+    /** 挂账到期日（约定回款日），用于账龄与逾期提醒 */
+    @Column(name = "credit_due_date")
+    private LocalDate creditDueDate;
+
+    /** 应收合计 = 房费 + 其他消费 + 延迟退房加收 − 折扣 */
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -149,5 +171,32 @@ public class Bill extends BaseEntity {
     /** 是否有过折扣 */
     public boolean isDiscounted() {
         return discountAmount != null && discountAmount.signum() > 0;
+    }
+
+    /** 是否发生了延迟退房加收 */
+    public boolean isLateCheckout() {
+        return lateCheckoutFee != null && lateCheckoutFee.signum() > 0;
+    }
+
+    /** 是否已登记挂账单位（应收账款台账） */
+    public boolean isCredited() {
+        return creditAccount != null && !creditAccount.isBlank();
+    }
+
+    /**
+     * 账龄：从退房日（未退房则从创建日）到今天的天数。
+     * <p>用于应收账款台账的「挂了多少天」与逾期判断。
+     */
+    public long getAgingDays() {
+        LocalDate base = reservation != null && reservation.getCheckOutTime() != null
+                ? reservation.getCheckOutTime().toLocalDate()
+                : (getCreatedAt() == null ? LocalDate.now() : getCreatedAt().toLocalDate());
+        return java.time.temporal.ChronoUnit.DAYS.between(base, LocalDate.now());
+    }
+
+    /** 是否已逾期（仅当登记了到期日且未结账） */
+    public boolean isOverdue() {
+        return status == BillStatus.UNPAID && creditDueDate != null
+                && creditDueDate.isBefore(LocalDate.now());
     }
 }

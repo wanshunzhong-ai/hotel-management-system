@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('布草外送')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('outsourcing')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('布草外送洗涤结算', '交给洗涤公司的交接单：送出扣在库、收回补在库、结算收口，外包环节终于有账')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-4 col-lg-2">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">已送出</div>
+                            <div class="stat-value" th:text="${sentCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4 col-lg-2">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">已收回</div>
+                            <div class="stat-value" th:text="${returnedCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4 col-lg-2">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">已结算</div>
+                            <div class="stat-value" th:text="${settledCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+                <div class="card-header">
+                    <h2><i class="bi bi-truck me-2 text-primary"></i>新建外送批次</h2>
+                    <span class="text-muted-sm">送出即把数量从布草「在库」转入「洗涤中」，任一行不足则整单不成立</span>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/laundry/outsourcing}" method="post">
+                        <div class="row g-2 align-items-end mb-3">
+                            <div class="col-12 col-lg-4">
+                                <label class="form-label">洗涤公司</label>
+                                <input type="text" class="form-control" name="vendor" maxlength="100"
+                                       placeholder="如：洁雅洗涤服务有限公司">
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">备注</label>
+                                <input type="text" class="form-control" name="remark" maxlength="200"
+                                       placeholder="如：周一取件、周四送回">
+                            </div>
+                        </div>
+
+                        <table class="table" id="outsource-table">
+                            <thead>
+                            <tr>
+                                <th style="width:260px">布草品名</th>
+                                <th style="width:130px">数量</th>
+                                <th style="width:160px">洗涤单价</th>
+                                <th style="width:80px">操作</th>
+                            </tr>
+                            </thead>
+                            <tbody id="outsource-rows">
+                            <tr>
+                                <td>
+                                    <select class="form-select" name="linenId">
+                                        <option value="">请选择</option>
+                                        <option th:each="l : ${linen}" th:value="${l.id}"
+                                                th:text="${l.itemName} + '（在库 ' + ${l.inStock} + '）'"></option>
+                                    </select>
+                                </td>
+                                <td><input type="number" class="form-control" name="quantity" min="1" value="1"></td>
+                                <td><input type="number" step="0.01" class="form-control" name="price" min="0"
+                                           value="0"></td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            onclick="this.closest('tr').remove()">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" id="add-row">
+                                <i class="bi bi-plus-lg me-1"></i>添加一行
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send me-1"></i>送出并生成交接单
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-list-ul me-2 text-primary"></i>外送批次</h2>
+                    <form th:action="@{/laundry/outsourcing}" method="get" class="d-flex gap-2">
+                        <select class="form-select form-select-sm" name="status" style="width:150px">
+                            <option value="">全部状态</option>
+                            <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                    th:selected="${status == s}"></option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">筛选</button>
+                    </form>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:160px">批次号</th>
+                            <th style="width:190px">洗涤公司</th>
+                            <th style="width:100px">总件数</th>
+                            <th style="width:120px">结算金额</th>
+                            <th style="width:110px">状态</th>
+                            <th style="width:140px">送出时间</th>
+                            <th style="width:140px">收回时间</th>
+                            <th style="width:100px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="b : ${batches}">
+                            <td class="mono" th:text="${b.batchNo}">WX—</td>
+                            <td th:text="${b.vendor} ?: '—'">—</td>
+                            <td class="mono" th:text="${b.totalQty}">0</td>
+                            <td class="money" th:text="'￥' + ${#numbers.formatDecimal(b.totalAmount, 1, 2)}">￥0.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${b.status.color}"
+                                      th:text="${b.status.label}">已送出</span>
+                            </td>
+                            <td class="text-muted-sm mono"
+                                th:text="${b.sentAt == null ? '—' : #temporals.format(b.sentAt,'MM-dd HH:mm')}">—</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${b.returnedAt == null ? '—' : #temporals.format(b.returnedAt,'MM-dd HH:mm')}">—</td>
+                            <td>
+                                <a th:href="@{'/laundry/outsourcing/' + ${b.id}}"
+                                   class="btn btn-sm btn-outline-primary">查看</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${batches.isEmpty()}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-truck"></i>还没有外送批次</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    // 明细行模板：直接克隆第一行，避免在页面里再写一份 HTML 片段
+    document.getElementById('add-row').addEventListener('click', function () {
+        var tbody = document.getElementById('outsource-rows');
+        var clone = tbody.rows[0].cloneNode(true);
+        clone.querySelectorAll('input').forEach(function (input) {
+            input.value = input.name === 'quantity' ? 1 : 0;
+        });
+        tbody.appendChild(clone);
+    });
+</script>
+</body>
+</html>

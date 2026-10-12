@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('团队入住')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('groups')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('团队入住', '批量办理入住与团名归档')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                <i class="bi bi-info-circle me-1"></i>
+                勾选同一团的订单，先<b>归入团队</b>打个团名，再<b>批量入住</b>。批量入住逐间办理，
+                某间房有异常（维修、已占用）不会连累其余房间，失败的订单仍留在待办里。
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="bi bi-people-fill me-2 text-primary"></i>预抵待办</h2>
+                            <form th:action="@{/groups/checkin}" method="get" class="d-flex align-items-center gap-2">
+                                <input type="date" class="form-control form-control-sm" name="date"
+                                       th:value="${date}" style="width:150px">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </form>
+                        </div>
+
+                        <form th:action="@{/groups/assign}" method="post" id="groupForm">
+                            <input type="hidden" name="date" th:value="${date}">
+
+                            <div class="card-body py-3 border-bottom">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-5">
+                                        <label class="form-label" for="groupName">团名</label>
+                                        <input type="text" class="form-control form-control-sm" id="groupName"
+                                               name="groupName" list="groupList" maxlength="60"
+                                               placeholder="留空表示移出团队" th:value="${group}">
+                                        <datalist id="groupList">
+                                            <option th:each="g : ${groups}" th:value="${g}"></option>
+                                        </datalist>
+                                    </div>
+                                    <div class="col-md-7 d-flex gap-2">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-people me-1"></i>归入团队
+                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-accent"
+                                                formaction="#" th:formaction="@{/groups/checkin/batch}">
+                                            <i class="bi bi-box-arrow-in-right me-1"></i>批量办理入住
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                                                onclick="toggleAll()" id="toggleBtn">全选</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="table-wrap">
+                                <table class="table table-sticky-first">
+                                    <thead>
+                                    <tr>
+                                        <th style="width:40px"></th>
+                                        <th style="width:130px">订单号</th>
+                                        <th>客户</th>
+                                        <th style="width:90px">房间</th>
+                                        <th style="width:150px">住店区间</th>
+                                        <th style="width:90px">房费</th>
+                                        <th style="width:110px">团名</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="r : ${pendingArrivals}">
+                                        <td>
+                                            <input type="checkbox" class="form-check-input row-check"
+                                                   name="ids" th:value="${r.id}" th:id="'pk' + ${r.id}">
+                                        </td>
+                                        <td>
+                                            <label class="mono" th:for="'pk' + ${r.id}"
+                                                   th:text="${r.orderNo}">RS202610100001</label>
+                                        </td>
+                                        <td>
+                                            <div th:text="${r.customer.name}">张伟</div>
+                                            <div class="text-muted-sm mono" th:text="${r.customer.phone}">—</div>
+                                        </td>
+                                        <td class="mono" th:text="${r.room.roomNo}">201</td>
+                                        <td class="text-muted-sm"
+                                            th:text="${#temporals.format(r.checkInDate,'MM-dd')} + ' → '
+                                                     + ${#temporals.format(r.checkOutDate,'MM-dd')} + ' · '
+                                                     + ${r.nightCount} + ' 晚'">—</td>
+                                        <td class="money"
+                                            th:text="'￥' + ${#numbers.formatDecimal(r.roomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                        <td>
+                                            <span class="badge-soft secondary" th:if="${r.groupName}"
+                                                  th:text="${r.groupName}">—</span>
+                                            <span class="text-muted-sm" th:unless="${r.groupName}">—</span>
+                                        </td>
+                                    </tr>
+                                    <tr th:if="${#lists.isEmpty(pendingArrivals)}">
+                                        <td colspan="7">
+                                            <div class="empty-state">
+                                                <i class="bi bi-calendar2-check"></i>
+                                                <span th:text="${#temporals.format(date,'yyyy-MM-dd')}">—</span> 没有待办理入住的订单
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="bi bi-diagram-3 me-2 text-primary"></i>按团查看</h2>
+                        </div>
+                        <div class="card-body py-3 border-bottom">
+                            <form th:action="@{/groups/checkin}" method="get" class="d-flex gap-2">
+                                <input type="hidden" name="date" th:value="${date}">
+                                <select class="form-select form-select-sm" name="group" onchange="this.form.submit()">
+                                    <option value="">选择团名…</option>
+                                    <option th:each="g : ${groups}" th:value="${g}" th:text="${g}"
+                                            th:selected="${group == g}"></option>
+                                </select>
+                            </form>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="table">
+                                <thead>
+                                <tr>
+                                    <th style="width:90px">房间</th>
+                                    <th>客户</th>
+                                    <th style="width:110px">住店区间</th>
+                                    <th style="width:90px">状态</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="m : ${members}">
+                                    <td class="mono" th:text="${m.room.roomNo}">201</td>
+                                    <td>
+                                        <a th:href="@{/reservations/{id}(id=${m.id})}" th:text="${m.customer.name}">张伟</a>
+                                    </td>
+                                    <td class="text-muted-sm"
+                                        th:text="${#temporals.format(m.checkInDate,'MM-dd')} + ' → '
+                                                 + ${#temporals.format(m.checkOutDate,'MM-dd')}">—</td>
+                                    <td>
+                                        <span class="badge-soft" th:classappend="${m.status.color}"
+                                              th:text="${m.status.label}">已预订</span>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(members)}">
+                                    <td colspan="4" class="text-center text-muted-sm py-3">
+                                        左侧选择一个团名，查看该团成员
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    function toggleAll() {
+        const boxes = document.querySelectorAll('.row-check');
+        const btn = document.getElementById('toggleBtn');
+        const allChecked = Array.prototype.every.call(boxes, function (b) { return b.checked; });
+        boxes.forEach(function (b) { b.checked = !allChecked; });
+        btn.textContent = allChecked ? '全选' : '取消全选';
+    }
+</script>
+</body>
+</html>

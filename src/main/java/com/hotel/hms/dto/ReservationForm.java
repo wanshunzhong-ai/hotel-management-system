@@ -37,4 +37,11 @@ public class ReservationForm {
     private Integer guestCount = 1;
 
     private String remark;
+
+    /**
+     * 房价方案（第六批：协议价 / 会员价）。
+     * <p>为空表示按门市价计价，价格即房型基准价；下单时会把方案名与门市价一起快照到订单上，
+     * 之后方案改价或停用都不影响历史订单。
+     */
+    private Long ratePlanId;
 }

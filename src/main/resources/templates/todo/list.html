@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('待办中心')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('todos')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('待办中心', '该我做的、该我催的，都在这一页；红色为超时或影响在售房量的紧急项')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">待办合计</div>
+                            <div class="stat-value" th:text="${total}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">紧急</div>
+                            <div class="stat-value" th:classappend="${urgent > 0} ? 'text-danger'" th:text="${urgent}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3" th:if="${total == 0}">
+                <div class="card-body">
+                    <div class="empty-state">
+                        <i class="bi bi-check2-circle"></i>当前没有待办事项，一切正常
+                    </div>
+                </div>
+            </div>
+
+            <div class="todo-grid">
+                <a th:each="t : ${items}" th:href="@{${t.link}}"
+                   class="todo-card" th:classappend="${!t.visible} ? 'zero'">
+                    <div class="todo-label">
+                        <i class="bi" th:classappend="${t.icon}"></i>
+                        <span th:text="${t.label}">待办</span>
+                    </div>
+                    <div class="todo-count"
+                         th:classappend="${t.level == 'danger'} ? 'text-danger' : (${t.level == 'warning'} ? 'text-warning' : '')"
+                         th:text="${t.count}">0</div>
+                    <div class="todo-hint" th:text="${t.hint}">说明</div>
+                </a>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body py-2">
+                    <p class="text-muted-sm mb-0">
+                        待办为<b>实时统计</b>，不做已读未读——事情一做完，这里立刻归零，
+                        不会出现「消息还挂着但活早干完了」。
+                        超时阈值：派工 4 小时、待验收 2 小时、维修 24 小时、失物 7 天。
+                    </p>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

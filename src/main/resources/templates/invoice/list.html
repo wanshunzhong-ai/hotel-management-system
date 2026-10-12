@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('发票管理')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('invoices')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('发票管理', '开票登记与作废留痕')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                <i class="bi bi-info-circle me-1"></i>
+                开票在<b>账单详情页</b>发起（账单结账后才会出现「开具发票」入口）。
+                这里汇总全部发票记录；一张账单可多次开票，累计金额不得超过该账单应收合计。
+                本系统只登记票面信息、不接税控，「作废」为软删除，保留流水可审计。
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/invoices}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="发票号 / 抬头 / 税号 / 账单号" style="width:230px">
+                        </div>
+                        <div>
+                            <label class="form-label">发票类型</label>
+                            <select class="form-select" name="type" style="width:160px">
+                                <option value="">全部类型</option>
+                                <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"
+                                        th:selected="${type != null && type == t}"></option>
+                            </select>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="includeCancelled"
+                                   name="includeCancelled" value="true" th:checked="${includeCancelled}"
+                                   onchange="this.form.submit()">
+                            <label class="form-check-label" for="includeCancelled">包含已作废</label>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/invoices}" class="btn btn-outline-secondary">重置</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-receipt-cutoff me-2 text-primary"></i>发票记录
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${page.totalElements} + ' 张'">—</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:150px">发票号</th>
+                            <th style="width:90px">类型</th>
+                            <th>抬头 / 税号</th>
+                            <th style="width:130px">账单 / 客户</th>
+                            <th class="text-end" style="width:110px">金额</th>
+                            <th style="width:130px">开票时间</th>
+                            <th style="width:90px">状态</th>
+                            <th style="width:110px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${page.content}">
+                            <td>
+                                <span class="mono" th:text="${i.invoiceNo}">IV—</span>
+                                <div class="text-muted-sm" th:text="${i.content}">住宿费</div>
+                            </td>
+                            <td>
+                                <span class="badge-soft primary" th:text="${i.type.shortLabel}">普票</span>
+                            </td>
+                            <td>
+                                <div th:text="${i.title}">—</div>
+                                <div class="text-muted-sm mono" th:text="${i.taxNo} ?: '无税号'">—</div>
+                            </td>
+                            <td>
+                                <a class="mono" th:href="@{/bills/{id}(id=${i.bill.id})}"
+                                   th:text="${i.bill.billNo}">BL—</a>
+                                <div class="text-muted-sm" th:text="${i.bill.customer.name}">—</div>
+                            </td>
+                            <td class="text-end money fw-bold"
+                                th:text="'￥' + ${#numbers.formatDecimal(i.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td class="text-muted-sm mono"
+                                th:text="${#temporals.format(i.issuedAt,'yyyy-MM-dd HH:mm')}">—</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.cancelled} ? 'secondary' : 'success'"
+                                      th:text="${i.cancelled} ? '已作废' : '有效'">有效</span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-1">
+                                    <a th:href="@{/invoices/{id}/print(id=${i.id})}"
+                                       class="btn btn-sm btn-outline-secondary" title="打印">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                    <form th:if="${!i.cancelled}" th:action="@{/invoices/{id}/cancel(id=${i.id})}"
+                                          method="post" data-confirm="确认作废该发票？作废后其金额不再占用账单可开额度。">
+                                        <input type="hidden" name="reason" value="前台作废">
+                                        <input type="hidden" name="billId" th:value="${i.bill.id}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="作废">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${page.totalElements == 0}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-receipt-cutoff"></i>还没有发票记录，结账后在账单详情页开票</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

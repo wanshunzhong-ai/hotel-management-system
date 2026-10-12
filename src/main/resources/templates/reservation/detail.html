@@ -17,6 +17,9 @@
                         <span class="mono" th:text="${reservation.orderNo}">RS202610100001</span>
                         <span class="badge-soft ms-2" th:classappend="${reservation.status.color}"
                               th:text="${reservation.status.label}">已预订</span>
+                        <span class="badge-soft secondary ms-1" th:if="${reservation.groupName}">
+                            <i class="bi bi-people me-1"></i><span th:text="${reservation.groupName}">团队</span>
+                        </span>
                     </h2>
                     <div class="d-flex gap-2" sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
                         <form th:if="${reservation.checkInAllowed}"
@@ -30,6 +33,21 @@
                         <a th:if="${reservation.status.name() == 'BOOKED'}"
                            th:href="@{/reservations/{id}/edit(id=${reservation.id})}"
                            class="btn btn-sm btn-outline-secondary">改单</a>
+                        <button th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+                                type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#changeRoomModal">
+                            <i class="bi bi-arrow-left-right me-1"></i>换房
+                        </button>
+                        <button th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+                                type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#lateCheckoutModal">
+                            <i class="bi bi-clock-history me-1"></i>延迟退房
+                        </button>
+                        <button th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+                                type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#groupModal">
+                            <i class="bi bi-people me-1"></i>团队
+                        </button>
                         <form th:if="${reservation.cancelAllowed}"
                               th:action="@{/reservations/{id}/cancel(id=${reservation.id})}" method="post"
                               data-confirm="确定取消该订单吗？">
@@ -68,6 +86,15 @@
                             <div class="money-lg" th:if="${reservation.earlyCheckout}"
                                  th:text="'￥' + ${#numbers.formatDecimal(reservation.actualRoomAmount, 1, 'COMMA', 2, 'POINT')}">￥0</div>
                             <div class="text-muted-sm" th:text="'￥' + ${#numbers.formatDecimal(reservation.unitPrice, 1, 'COMMA', 2, 'POINT')} + ' / 晚'">—</div>
+                            <div class="text-muted-sm" th:if="${reservation.hasRatePlan}">
+                                <span class="badge-soft success" th:text="${reservation.ratePlanLabel}">会员价</span>
+                                <span th:if="${reservation.rateDiscountPerNight.signum() > 0}"
+                                      th:text="' 门市价 ￥' + ${#numbers.formatDecimal(reservation.listPrice, 1, 'COMMA', 2, 'POINT')}
+                                               + '，每晚省 ￥' + ${#numbers.formatDecimal(reservation.rateDiscountPerNight, 1, 'COMMA', 2, 'POINT')}">—</span>
+                            </div>
+                            <div class="text-muted-sm" th:if="${reservation.lateCheckout}" style="color:#b45309"
+                                 th:text="'延迟退房加收 ￥' + ${#numbers.formatDecimal(reservation.lateCheckoutFee, 1, 'COMMA', 2, 'POINT')}
+                                          + '（退房计入账单）'">—</div>
                             <div class="text-muted-sm" th:if="${reservation.earlyCheckout}" style="color:#0f9d58"
                                  th:text="'实际 ' + ${reservation.actualNightCount} + ' 晚 · 提前离店减免 ￥' + ${#numbers.formatDecimal(reservation.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">—</div>
                         </div>
@@ -84,6 +111,107 @@
                             <div th:text="${reservation.remark} ?: '—'">—</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 押金 / 预订金收退（第六批）：以收款流水为准，账单押金由流水汇总 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-cash-stack me-2 text-primary"></i>押金 / 预订金</h2>
+                    <div class="d-flex gap-3 text-muted-sm">
+                        <span>预收款净额 <b class="money"
+                                th:text="'￥' + ${#numbers.formatDecimal(prepaymentNet, 1, 'COMMA', 2, 'POINT')}">￥0</b></span>
+                        <span>可退押金余额 <b class="money"
+                                th:text="'￥' + ${#numbers.formatDecimal(depositBalance, 1, 'COMMA', 2, 'POINT')}">￥0</b></span>
+                    </div>
+                </div>
+                <div class="card-body" sec:authorize="hasAnyRole('ADMIN','RECEPTION')"
+                     th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}">
+                    <div class="row g-2">
+                        <div class="col-lg-4">
+                            <form th:action="@{/payments/deposit}" method="post" class="border rounded p-2"
+                                  style="border-color:#e6eaf2!important">
+                                <input type="hidden" name="reservationId" th:value="${reservation.id}">
+                                <div class="text-muted-sm mb-1"><i class="bi bi-shield-plus me-1"></i>收取押金</div>
+                                <div class="d-flex gap-2">
+                                    <input type="number" step="0.01" min="0.01" class="form-control form-control-sm"
+                                           name="amount" placeholder="金额" required style="width:110px">
+                                    <select class="form-select form-select-sm" name="payMethod">
+                                        <option th:each="m : ${payMethods}" th:value="${m}" th:text="${m.label}"></option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-accent">收</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col-lg-4" th:if="${reservation.status.name() == 'BOOKED'}">
+                            <form th:action="@{/payments/booking}" method="post" class="border rounded p-2"
+                                  style="border-color:#e6eaf2!important">
+                                <input type="hidden" name="reservationId" th:value="${reservation.id}">
+                                <div class="text-muted-sm mb-1"><i class="bi bi-bookmark-plus me-1"></i>收取预订金</div>
+                                <div class="d-flex gap-2">
+                                    <input type="number" step="0.01" min="0.01" class="form-control form-control-sm"
+                                           name="amount" placeholder="金额" required style="width:110px">
+                                    <select class="form-select form-select-sm" name="payMethod">
+                                        <option th:each="m : ${payMethods}" th:value="${m}" th:text="${m.label}"></option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-accent">收</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col-lg-4">
+                            <form th:action="@{/payments/refund}" method="post" class="border rounded p-2"
+                                  style="border-color:#e6eaf2!important"
+                                  th:attr="data-confirm='确认退还押金？金额不得超过可退余额。'">
+                                <input type="hidden" name="reservationId" th:value="${reservation.id}">
+                                <div class="text-muted-sm mb-1"><i class="bi bi-shield-minus me-1"></i>退还押金</div>
+                                <div class="d-flex gap-2">
+                                    <input type="number" step="0.01" min="0.01" class="form-control form-control-sm"
+                                           name="amount" placeholder="金额" required style="width:110px">
+                                    <select class="form-select form-select-sm" name="payMethod">
+                                        <option th:each="m : ${payMethods}" th:value="${m}" th:text="${m.label}"></option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">退</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:140px">时间</th>
+                            <th style="width:130px">类型</th>
+                            <th class="text-end" style="width:120px">金额</th>
+                            <th style="width:110px">方式</th>
+                            <th style="width:100px">操作人</th>
+                            <th>备注</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="p : ${payments}">
+                            <td class="mono text-muted-sm"
+                                th:text="${#temporals.format(p.occurredAt,'yyyy-MM-dd HH:mm')}">—</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${p.type.income} ? 'success' : 'danger'">
+                                    <i th:class="'bi ' + ${p.type.icon} + ' me-1'"></i>
+                                    <span th:text="${p.type.label}">收取押金</span>
+                                </span>
+                            </td>
+                            <td class="text-end money fw-bold"
+                                th:classappend="${p.type.income} ? 'text-success' : 'text-danger'"
+                                th:text="${(p.type.income ? '+' : '-') + '￥' + #numbers.formatDecimal(p.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td th:text="${p.payMethod == null ? '—' : p.payMethod.label}">现金</td>
+                            <td th:text="${p.operator} ?: '—'">—</td>
+                            <td class="text-muted-sm" th:text="${p.remark} ?: '—'">—</td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(payments)}">
+                            <td colspan="6" class="text-center text-muted-sm py-3">
+                                还没有押金 / 预订金流水。收取后账单押金会自动按流水汇总。
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -198,6 +326,118 @@
     </div>
 </div>
 
+<!-- 换房弹窗（第六批）：在住客人换房留痕，不再手工改房态 -->
+<div class="modal fade" id="changeRoomModal" tabindex="-1" aria-hidden="true"
+     th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+     sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form th:action="@{/reservations/{id}/change-room(id=${reservation.id})}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>换房</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                        当前房间 <b class="mono" th:text="${reservation.room.roomNo}">—</b>。
+                        在住换房时旧房转「待清洁」、新房转「已入住」；换到不同房型会按新房型重新计价。
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label required" for="newRoomId">换到房间</label>
+                        <select class="form-select" id="newRoomId" name="newRoomId" required>
+                            <option value="">请选择新房</option>
+                            <option th:each="r : ${rooms}" th:value="${r.id}"
+                                    th:text="${r.roomNo} + ' · ' + ${r.roomType.name}
+                                             + ' · ￥' + ${#numbers.formatDecimal(r.roomType.price, 1, 'COMMA', 2, 'POINT')}
+                                             + ' · ' + ${r.status.label}"></option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="changeReason">换房原因</label>
+                        <input type="text" class="form-control" id="changeReason" name="reason"
+                               placeholder="如：客人嫌临街太吵">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>确认换房</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 延迟退房弹窗（第六批）：加收在下单时算好，退房自动计入账单房费侧 -->
+<div class="modal fade" id="lateCheckoutModal" tabindex="-1" aria-hidden="true"
+     th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+     sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form th:action="@{/reservations/{id}/late-checkout(id=${reservation.id})}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>延迟退房</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-muted-sm mb-3"
+                         th:text="'房价 ￥' + ${#numbers.formatDecimal(reservation.unitPrice, 1, 'COMMA', 2, 'POINT')} + ' / 晚，加收按档位自动计算。'">—</div>
+                    <div class="mb-3">
+                        <label class="form-label required" for="lateTier">加收档位</label>
+                        <select class="form-select" id="lateTier" name="tier" onchange="toggleCustomFee()">
+                            <option th:each="t : ${lateTiers}" th:value="${t}" th:text="${t.label}"
+                                    th:selected="${reservation.lateCheckoutTier == t}"></option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="customFeeWrap" style="display:none">
+                        <label class="form-label" for="customFee">自定义加收金额（元）</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control" id="customFee"
+                               name="customFee"
+                               th:value="${reservation.lateCheckout == true ? reservation.lateCheckoutFee : ''}">
+                    </div>
+                    <div class="text-muted-sm">
+                        选择「不延迟」并保存即可取消加收。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 归团弹窗（第六批）：团队入住 -->
+<div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true"
+     th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}"
+     sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form th:action="@{/reservations/{id}/group(id=${reservation.id})}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-people me-2"></i>团队归属</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="groupNameInput">团名</label>
+                        <input type="text" class="form-control" id="groupNameInput" name="groupName"
+                               maxlength="60" th:value="${reservation.groupName}"
+                               placeholder="留空表示移出团队">
+                        <div class="text-muted-sm mt-1">
+                            填同一团名的订单可在「团队入住」页批量办理入住。
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div th:replace="~{fragments/layout :: scripts}"></div>
 
 <script th:if="${reservation.checkOutAllowed}">
@@ -234,6 +474,16 @@
         });
         recalc();
     })();
+</script>
+
+<script th:if="${reservation.status.name() == 'BOOKED' or reservation.status.name() == 'CHECKED_IN'}">
+    function toggleCustomFee() {
+        const sel = document.getElementById('lateTier');
+        const wrap = document.getElementById('customFeeWrap');
+        if (!sel || !wrap) return;
+        wrap.style.display = sel.value === 'CUSTOM' ? '' : 'none';
+    }
+    document.addEventListener('DOMContentLoaded', toggleCustomFee);
 </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 酒店管理系统 —— 第四批（客房服务部模块）验收测试
 #
-#  1. 角色与权限隔离：客房部（HOUSEKEEPING）只能进客房相关页面；验收仅管理员
+#  1. 角色与权限隔离：客房部（HOUSEKEEPING）只能进客房相关页面；验收限管理员与前台（客房部不能验收）
 #  2. 派工单：派工 → 服务员完成 → 主管验收通过（房间自动转「空闲」，房态闭环）
 #  3. 打回重做：打回必须填原因；打回后服务员可重新提交验收
 #  4. 迷你吧 / 客用品挂账：在住挂账（非在住房间被拒）→ 退房时自动并入账单其他消费
@@ -21,6 +21,9 @@ no()   { FAIL=$((FAIL+1)); printf "  \033[31m[FAIL]\033[0m %s\n" "$1"; }
 chk()  { if [ "$2" = "$3" ]; then ok "$1 ($2)"; else no "$1 期望[$3] 实际[$2]"; fi; }
 has()  { if printf '%s' "$2" | grep -q -- "$3"; then ok "$1"; else no "$1（未匹配 [$3]）"; fi; }
 lacks(){ if printf '%s' "$2" | grep -q -- "$3"; then no "$1（不应出现 [$3]）"; else ok "$1"; fi; }
+# operation_log 只增不删（clean-test-data.sh 不清理它），所以对日志计数只能用「>=$3」，
+# 否则第二次运行就会因为上一轮的记录而假失败
+ge()   { if [ "${2:-0}" -ge "${3:-1}" ] 2>/dev/null; then ok "$1 ($2)"; else no "$1 期望>=[$3] 实际[$2]"; fi; }
 badge_count() { grep -o "badge-soft[^>]*>$2" "$1" | wc -l | tr -d ' '; }
 
 MYSQL_BIN="${MYSQL_BIN:-/d/SoftWare/MySQL/MySQL Server 9.0/bin/mysql.exe}"
@@ -64,6 +67,15 @@ idle_room() {
      where r.status='AVAILABLE'
        and not exists (select 1 from reservation v where v.room_id=r.id and v.status='CHECKED_IN')
      order by r.id limit 1;"
+}
+
+# 第七批起：派工单会按「清洁标准」生成检查清单，未全勾不能提交完成。
+# 测试里先一键全勾，再把工单标记完成——即模拟服务员逐项确认后的提交。
+tick_all() { # $1=任务id $2=cookiejar $3=临时文件
+  local t
+  t=$(csrf_of "$BASE/housekeeping/tasks/$1" "$2" "$3")
+  post_form "$BASE/housekeeping/tasks/$1/checklist/all" "$2" "$t" \
+    --data-urlencode "checked=true" > /dev/null
 }
 
 echo "=============================================="
@@ -121,6 +133,15 @@ has "服务员能看到派给自己的单" "$(curl -s -b "$CJH" "$BASE/housekeep
 
 # 令牌必须取自被登录人自己的会话，否则 CSRF 校验会 403
 T=$(csrf_of "$BASE/housekeeping/tasks" "$CJH" "$TMP/hk_hk.html")
+# 第七批：检查单未全勾就提交完成 → 业务拒绝（返回 200 但状态不变 + 页面提示）
+chk "未打勾即提交完成（200 但被业务拒绝）" \
+    "$(post_form "$BASE/housekeeping/tasks/$TASK1/done" "$CJH" "$T")" "200"
+chk "未打勾 → 任务仍是待完成" "$(q "select status from housekeeping_task where id=$TASK1;")" "PENDING"
+has "页面提示检查单未打勾" "$(cat "$TMP/post.html")" '项未打勾'
+tick_all "$TASK1" "$CJH" "$TMP/hk_cl1.html"
+chk "一键全勾后检查单全部打勾" \
+    "$(q "select count(*) from task_checklist where task_id=$TASK1 and checked+0=0;")" "0"
+T=$(csrf_of "$BASE/housekeeping/tasks" "$CJH" "$TMP/hk_hk1.html")
 chk "服务员标记完成（200）" \
     "$(post_form "$BASE/housekeeping/tasks/$TASK1/done" "$CJH" "$T")" "200"
 chk "任务转为待验收" "$(q "select status from housekeeping_task where id=$TASK1;")" "DONE"
@@ -148,6 +169,7 @@ post_form "$BASE/housekeeping/tasks" "$CJ" "$T" \
   --data-urlencode "roomId=$RID1" --data-urlencode "type=STAYOVER" \
   --data-urlencode "assigneeId=$HK_ID" --data-urlencode "remark=第四批测试-打回" > /dev/null
 TASK2=$(q "select max(id) from housekeeping_task;")
+tick_all "$TASK2" "$CJH" "$TMP/hk_cl2.html"
 T=$(csrf_of "$BASE/housekeeping/tasks" "$CJH" "$TMP/hk_hk2.html")
 post_form "$BASE/housekeeping/tasks/$TASK2/done" "$CJH" "$T" > /dev/null
 chk "第二单已提交验收" "$(q "select status from housekeeping_task where id=$TASK2;")" "DONE"
@@ -166,11 +188,19 @@ chk "带原因打回成功" "$(q "select status from housekeeping_task where id=
 chk "打回原因已留痕" "$(q "select inspect_remark from housekeeping_task where id=$TASK2;")" "浴缸没刷干净"
 
 T=$(csrf_of "$BASE/housekeeping/tasks" "$CJH" "$TMP/hk_hk3.html")
+tick_all "$TASK2" "$CJH" "$TMP/hk_cl3.html"
+T=$(csrf_of "$BASE/housekeeping/tasks" "$CJH" "$TMP/hk_hk4.html")
 chk "被打回后可重新标记完成（200）" \
     "$(post_form "$BASE/housekeeping/tasks/$TASK2/done" "$CJH" "$T")" "200"
 chk "重新提交后回到待验收" "$(q "select status from housekeeping_task where id=$TASK2;")" "DONE"
 curl -s -b "$CJH" "$BASE/housekeeping/tasks?status=REJECTED" -o "$TMP/rej_list.html"
-chk "按状态筛选：已打回为空" "$(grep -c 'badge-soft[^>]*>被打回' "$TMP/rej_list.html")" "0"
+# 断言口径：页面「被打回」徽标条数必须等于库里 REJECTED 的条数。
+# 早前这里写死期望 0，隐含假设「全库没有别的被打回工单」——一旦别的批次（如第七批的
+# 打回流程验收）留下一条 REJECTED 记录，这里就会假失败。改成与库中计数比对，
+# 既保留「状态筛选真的生效」的验证力，又不再依赖测试执行顺序。
+chk "按状态筛选：已打回条数与库中一致" \
+    "$(grep -c 'badge-soft[^>]*>被打回' "$TMP/rej_list.html")" \
+    "$(q "select count(*) from housekeeping_task where status='REJECTED';")"
 
 echo
 echo "=============================================="
@@ -324,6 +354,104 @@ done
 LOGP=$(curl -s -b "$CJ" "$BASE/logs")
 has "管理员日志页可见派工记录" "$LOGP" '派工'
 chk "日志页仍对客房部关闭" "$(code_of "$CJH" "$BASE/logs")" "403"
+
+echo
+echo "=============================================="
+echo " 8. 权限加固回归（第五批修补）"
+echo "=============================================="
+RCP_NAME=$(q "select real_name from sys_user where username='reception';")
+HK_NAME=$(q "select real_name from sys_user where username='housekeeping';")
+
+# 8.1 /rooms/save 越权：先前只拦了 GET 表单页（/rooms/new、/rooms/*/edit），
+#     漏了表单提交地址，客房部能绕过被隐藏的按钮直接 POST 建房/改房
+T=$(csrf_of "$BASE/rooms" "$CJH" "$TMP/p_rooms.html")
+chk "客房部提交 /rooms/save 被拒（403）" \
+    "$(post_form "$BASE/rooms/save" "$CJH" "$T" --data-urlencode "roomNo=9999")" "403"
+# 对照：同一个令牌提交「房态变更」是放行的 → 证明上面的 403 来自授权而非 CSRF 失败
+RID_CTL=$(idle_room)
+chk "对照：客房部同一令牌改房态放行（200）" \
+    "$(post_form "$BASE/rooms/$RID_CTL/status" "$CJH" "$T" --data-urlencode "status=AVAILABLE")" "200"
+TR=$(csrf_of "$BASE/rooms" "$CJR" "$TMP/p_rooms_r.html")
+chk "前台未被 /rooms/save 拦截（200）" \
+    "$(post_form "$BASE/rooms/save" "$CJR" "$TR" \
+        --data-urlencode "id=999999" --data-urlencode "roomNo=不存在的房间")" "200"
+chk "越权尝试未写入任何客房" \
+    "$(q "select count(*) from room where room_no in ('9999','不存在的房间');")" "0"
+
+# 8.2 看板数据隔离：客房部不该看到营收口径
+DH=$(curl -s -b "$CJH" "$BASE/dashboard")
+DA=$(curl -s -b "$CJ" "$BASE/dashboard")
+has   "客房部看板保留房态指标"       "$DH" '在住房间'
+has   "客房部看板保留今日待办"       "$DH" '今日待办'
+lacks "客房部看板不含「今日营收」"    "$DH" '今日营收'
+lacks "客房部看板不含「累计营收」"    "$DH" '累计营收'
+lacks "客房部看板不含「在住预计房费」" "$DH" '在住预计房费'
+lacks "客房部看板不含营收趋势图"      "$DH" '近 7 日营收趋势'
+lacks "客房部看板源码中无金额符号"    "$DH" '￥'
+has   "管理员看板仍含「今日营收」"    "$DA" '今日营收'
+has   "管理员看板仍含营收趋势图"      "$DA" '近 7 日营收趋势'
+
+# 8.3 验收权开放给前台（解开「管理员不在岗→房间卡在待清洁」的死结）
+chk "（前置）第二单仍处于待验收" "$(q "select status from housekeeping_task where id=$TASK2;")" "DONE"
+T=$(csrf_of "$BASE/housekeeping/tasks" "$CJR" "$TMP/p_hk_r.html")
+chk "前台验收通过（200）" \
+    "$(post_form "$BASE/housekeeping/tasks/$TASK2/inspect" "$CJR" "$T" \
+        --data-urlencode "action=approve" --data-urlencode "inspectRemark=前台代验收")" "200"
+chk "任务状态=验收通过"   "$(q "select status from housekeeping_task where id=$TASK2;")" "APPROVED"
+chk "验收人记录为前台"     "$(q "select inspector from housekeeping_task where id=$TASK2;")" "$RCP_NAME"
+
+# 8.4 撤销挂账：必须填原因；客房部只能撤本人录入的
+RID3=$(pick_free_room "$TODAY" "$D2")
+T=$(csrf_of "$BASE/reservations/new" "$CJ" "$TMP/p_new.html")
+post_form "$BASE/reservations/save" "$CJ" "$T" \
+  --data-urlencode "customerId=$CID" --data-urlencode "roomId=$RID3" \
+  --data-urlencode "checkInDate=$TODAY" --data-urlencode "checkOutDate=$D2" \
+  --data-urlencode "guestCount=1" --data-urlencode "remark=第四批测试-撤销权限" > /dev/null
+ORD3=$(newest_order "$CJ")
+T=$(csrf_of "$BASE/reservations/$ORD3" "$CJ" "$TMP/p_ord.html")
+post_form "$BASE/reservations/$ORD3/checkin" "$CJ" "$T" > /dev/null
+chk "（前置）新订单已入住" "$(q "select status from reservation where id=$ORD3;")" "CHECKED_IN"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJH" "$TMP/p_mb_hk.html")
+post_form "$BASE/housekeeping/minibar" "$CJH" "$T" \
+  --data-urlencode "roomId=$RID3" --data-urlencode "itemName=第五批测试-客房部自录" \
+  --data-urlencode "quantity=1" --data-urlencode "unitPrice=12" > /dev/null
+MB_HK=$(q "select max(id) from minibar_item;")
+chk "（前置）客房部自录挂账落库" "$(q "select operator from minibar_item where id=$MB_HK;")" "$HK_NAME"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJR" "$TMP/p_mb_r.html")
+post_form "$BASE/housekeeping/minibar" "$CJR" "$T" \
+  --data-urlencode "roomId=$RID3" --data-urlencode "itemName=第五批测试-前台录入" \
+  --data-urlencode "quantity=1" --data-urlencode "unitPrice=20" > /dev/null
+MB_R=$(q "select max(id) from minibar_item;")
+chk "（前置）前台录入挂账落库" "$(q "select operator from minibar_item where id=$MB_R;")" "$RCP_NAME"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJH" "$TMP/p_mb1.html")
+post_form "$BASE/housekeeping/minibar/$MB_HK/delete" "$CJH" "$T" > /dev/null
+has "撤销不填原因被拒" "$(cat "$TMP/post.html")" '请填写撤销原因'
+chk "被拒后该挂账仍在" "$(q "select count(*) from minibar_item where id=$MB_HK;")" "1"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJH" "$TMP/p_mb2.html")
+post_form "$BASE/housekeeping/minibar/$MB_R/delete" "$CJH" "$T" \
+  --data-urlencode "reason=想抹掉别人记的账" > /dev/null
+has "客房部撤销他人挂账被拒" "$(cat "$TMP/post.html")" '只能撤销本人录入的挂账'
+chk "被拒后他人挂账仍在" "$(q "select count(*) from minibar_item where id=$MB_R;")" "1"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJH" "$TMP/p_mb3.html")
+post_form "$BASE/housekeeping/minibar/$MB_HK/delete" "$CJH" "$T" \
+  --data-urlencode "reason=录错房间需重录" > /dev/null
+chk "客房部撤销本人挂账成功" "$(q "select count(*) from minibar_item where id=$MB_HK;")" "0"
+
+T=$(csrf_of "$BASE/housekeeping/minibar" "$CJR" "$TMP/p_mb4.html")
+post_form "$BASE/housekeeping/minibar/$MB_R/delete" "$CJR" "$T" \
+  --data-urlencode "reason=客人已自行买单" > /dev/null
+chk "前台撤销他人挂账成功" "$(q "select count(*) from minibar_item where id=$MB_R;")" "0"
+
+ge "两条撤销均已留痕（迷你吧取消）" \
+   "$(q "select count(*) from operation_log where action='迷你吧取消'
+           and (detail like '%第五批测试-客房部自录%' or detail like '%第五批测试-前台录入%');")" 2
+ge "撤销原因已写入操作日志" \
+   "$(q "select count(*) from operation_log where action='迷你吧取消' and detail like '%录错房间需重录%';")" 1
 
 echo
 echo "=============================================="

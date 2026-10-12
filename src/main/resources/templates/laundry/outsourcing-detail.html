@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('外送交接单')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('outsourcing')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('布草外送交接单', '可直接打印交给洗涤公司签字；收回后补回在库，结算后收口')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3 no-print">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印 / 另存 PDF
+                    </button>
+                    <a th:href="@{/laundry/outsourcing}" class="btn btn-outline-secondary">返回批次列表</a>
+
+                    <div class="ms-auto d-flex gap-2 flex-wrap">
+                        <form th:if="${batch.status.name() == 'SENT'}"
+                              sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                              th:action="@{'/laundry/outsourcing/' + ${batch.id} + '/return'}" method="post"
+                              data-confirm="确认这批布草已全部收回？收回后数量将补回「在库」。">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-box-arrow-in-down me-1"></i>确认收回
+                            </button>
+                        </form>
+
+                        <form th:if="${batch.status.name() == 'RETURNED'}"
+                              sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                              th:action="@{'/laundry/outsourcing/' + ${batch.id} + '/settle'}" method="post"
+                              class="d-flex gap-2" data-confirm="确认与洗涤公司完成结算？">
+                            <input type="number" step="0.01" min="0" class="form-control" name="amount"
+                                   style="width:150px" th:value="${batch.totalAmount}"
+                                   th:attr="placeholder='结算金额'">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-cash-coin me-1"></i>结算
+                            </button>
+                        </form>
+
+                        <form th:if="${batch.status.name() == 'SENT'}"
+                              sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                              th:action="@{'/laundry/outsourcing/' + ${batch.id} + '/cancel'}" method="post"
+                              data-confirm="确认取消这次外送？数量将退回在库。">
+                            <input type="hidden" name="reason" value="误操作取消">
+                            <button type="submit" class="btn btn-outline-danger">取消送出</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card print-sheet">
+                <div class="card-body">
+                    <div class="print-head">
+                        <div>
+                            <div class="print-hotel" th:text="${hotelName}">云栖大酒店</div>
+                            <div class="text-muted-sm">布草外送洗涤交接单 / LINEN OUTSOURCING</div>
+                        </div>
+                        <div class="text-end text-muted-sm">
+                            <div class="mono" th:text="${batch.batchNo}">WX—</div>
+                            <div th:text="'打印时间 ' + ${#temporals.format(#temporals.createNow(),'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="print-grid">
+                        <div><span class="text-muted-sm">洗涤公司</span><b th:text="${batch.vendor} ?: '—'">—</b></div>
+                        <div><span class="text-muted-sm">状态</span><b th:text="${batch.status.label}">已送出</b></div>
+                        <div><span class="text-muted-sm">送出时间</span>
+                            <span class="mono"
+                                  th:text="${batch.sentAt == null ? '—' : #temporals.format(batch.sentAt,'yyyy-MM-dd HH:mm')}">—</span></div>
+                        <div><span class="text-muted-sm">收回时间</span>
+                            <span class="mono"
+                                  th:text="${batch.returnedAt == null ? '—' : #temporals.format(batch.returnedAt,'yyyy-MM-dd HH:mm')}">—</span></div>
+                        <div><span class="text-muted-sm">经办人</span><b th:text="${batch.operator} ?: '—'">—</b></div>
+                        <div th:if="${batch.remark}"><span class="text-muted-sm">备注</span>
+                            <span th:text="${batch.remark}">—</span></div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <table class="table print-table">
+                        <thead>
+                        <tr>
+                            <th>布草品名</th>
+                            <th class="text-end" style="width:110px">数量</th>
+                            <th class="text-end" style="width:130px">洗涤单价</th>
+                            <th class="text-end" style="width:150px">金额</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${batch.items}">
+                            <td th:text="${i.itemName}">床单</td>
+                            <td class="text-end mono" th:text="${i.quantity}">0</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(i.unitPrice, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(i.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tbody>
+                        <tfoot>
+                        <tr>
+                            <td class="text-end"><b>合计</b></td>
+                            <td class="text-end mono"><b th:text="${batch.totalQty}">0</b></td>
+                            <td></td>
+                            <td class="text-end money print-total"
+                                th:text="'￥' + ${#numbers.formatDecimal(batch.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="print-sign">
+                        <div>送出方签名：<span class="sign-line"></span></div>
+                        <div>接收方签名：<span class="sign-line"></span></div>
+                        <div>日期：<span class="sign-line"></span></div>
+                    </div>
+
+                    <div class="print-foot">
+                        本单据由 <span th:text="${hotelName}">云栖大酒店</span> 管理系统生成 ·
+                        送出即转「洗涤中」，收回补回「在库」，结算须在收回之后
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

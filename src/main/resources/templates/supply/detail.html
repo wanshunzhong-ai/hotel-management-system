@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('耗材明细')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('supplies')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('耗材明细', '库存变动逐笔可追溯：每一笔都记了变动后快照、方向与经手人')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <a th:href="@{/supplies}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回台账
+                </a>
+                <span class="badge-soft" th:classappend="${item.belowMin} ? 'danger' : 'success'"
+                      th:text="${item.belowMin ? '低于安全库存' : '库存正常'}">正常</span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">当前库存</div>
+                            <div class="stat-value" th:text="${item.stock}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">安全库存</div>
+                            <div class="stat-value" th:text="${item.minStock}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">参考单价</div>
+                            <div class="stat-value" th:text="'￥' + ${#numbers.formatDecimal(item.unitCost, 1, 2)}">￥0.00</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">流水笔数</div>
+                            <div class="stat-value" th:text="${movements.size()}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-lg-5">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h2><i class="bi bi-info-circle me-2 text-primary"></i>基本信息</h2>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless mb-0">
+                                <tbody>
+                                <tr><th style="width:100px" class="text-muted-sm">品名</th><td th:text="${item.itemName}">—</td></tr>
+                                <tr><th class="text-muted-sm">分类</th><td th:text="${item.category.label}">—</td></tr>
+                                <tr><th class="text-muted-sm">单位</th><td th:text="${item.unit} ?: '件'">件</td></tr>
+                                <tr><th class="text-muted-sm">状态</th>
+                                    <td th:text="${item.enabled ? '启用' : '停用'}">启用</td></tr>
+                                <tr><th class="text-muted-sm">备注</th><td th:text="${item.note} ?: '—'">—</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+                        <div class="card-header">
+                            <h2><i class="bi bi-sliders me-2 text-primary"></i>参数设置</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{'/supplies/' + ${item.id} + '/update'}" method="post">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label">安全库存</label>
+                                        <input type="number" class="form-control" name="minStock" min="0"
+                                               th:value="${item.minStock}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">参考单价</label>
+                                        <input type="number" step="0.01" class="form-control" name="unitCost" min="0"
+                                               th:value="${item.unitCost}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">单位</label>
+                                        <input type="text" class="form-control" name="unit" maxlength="20"
+                                               th:value="${item.unit}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">启用</label>
+                                        <select class="form-select" name="enabled">
+                                            <option value="true" th:selected="${item.enabled}">启用</option>
+                                            <option value="false" th:selected="${!item.enabled}">停用</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">备注</label>
+                                        <input type="text" class="form-control" name="note" maxlength="200"
+                                               th:value="${item.note}">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 mt-3">保存参数</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="bi bi-clock-history me-2 text-primary"></i>出入库流水</h2>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="table">
+                                <thead>
+                                <tr>
+                                    <th style="width:130px">时间</th>
+                                    <th style="width:95px">类型</th>
+                                    <th style="width:70px">数量</th>
+                                    <th style="width:95px">变动后库存</th>
+                                    <th style="width:120px">去向</th>
+                                    <th style="width:95px">经手人</th>
+                                    <th>备注</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="m : ${movements}">
+                                    <td class="mono text-muted-sm"
+                                        th:text="${#temporals.format(m.movedAt,'MM-dd HH:mm')}">—</td>
+                                    <td>
+                                        <span class="badge-soft" th:classappend="${m.type.color}"
+                                              th:text="${m.type.label}">入库</span>
+                                    </td>
+                                    <td class="mono" th:text="${m.quantity}">0</td>
+                                    <td class="mono text-muted-sm" th:text="${m.stockAfter}">0</td>
+                                    <td class="text-muted-sm" th:text="${m.target} ?: '—'">—</td>
+                                    <td class="text-muted-sm" th:text="${m.operator}">—</td>
+                                    <td class="text-muted-sm" th:text="${m.remark} ?: '—'">—</td>
+                                </tr>
+                                <tr th:if="${movements.isEmpty()}">
+                                    <td colspan="7">
+                                        <div class="empty-state"><i class="bi bi-clock-history"></i>暂无流水</div>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

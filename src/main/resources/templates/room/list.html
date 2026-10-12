@@ -100,7 +100,7 @@
                                       class="d-inline-flex align-items-center gap-1">
                                     <input type="hidden" name="redirectTo" value="/rooms">
                                     <select class="form-select form-select-sm" name="status" style="width:104px">
-                                        <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                        <option th:each="s : ${changeableStatuses}" th:value="${s}" th:text="${s.label}"
                                                 th:selected="${s == r.status}"></option>
                                     </select>
                                     <button type="submit" class="btn btn-sm btn-outline-secondary">更新</button>

@@ -4,6 +4,7 @@ import com.hotel.hms.common.BusinessException;
 import com.hotel.hms.entity.InspectionResult;
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.ReservationStatus;
+import com.hotel.hms.entity.Role;
 import com.hotel.hms.entity.Room;
 import com.hotel.hms.entity.RoomInspection;
 import com.hotel.hms.entity.RoomStatus;
@@ -131,7 +132,11 @@ public class InspectionService {
 
     private Long firstStaffId() {
         List<User> staff = housekeepingService.listStaff();
-        return staff.isEmpty() ? null : staff.get(0).getId();
+        // 优先派给一线客房服务员；一个都没有时（如只留了主管）才落到主管身上
+        return staff.stream().filter(u -> u.getRole() == Role.HOUSEKEEPING).findFirst()
+                .or(() -> staff.stream().findFirst())
+                .map(User::getId)
+                .orElse(null);
     }
 
     private Integer score(Integer value, String field) {

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('现场上报')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('hk')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('现场上报', '扫房间二维码或输入房号，直达该房操作台：报修、登记失物、挂账、改房态')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-upc-scan me-2 text-primary"></i>输入房号进入操作台</h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/hk}" method="get" class="d-flex gap-2">
+                        <input type="text" class="form-control" name="roomNo" placeholder="如 8801" required
+                               style="max-width:220px">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>进入
+                        </button>
+                    </form>
+                    <p class="text-muted-sm mt-2 mb-0">
+                        房间里贴的二维码默认是住客点单页；把下面的「员工码」打印贴在房内工作区，
+                        扫地时扫一扫即可直接落到本房操作台（员工码需登录，住客扫了也进不来）。
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>按房号直达</h2>
+                    <span class="text-muted-sm" th:text="'共 ' + ${rooms.size()} + ' 间'">共 0 间</span>
+                </div>
+                <div class="card-body">
+                    <div class="console-actions">
+                        <a th:each="r : ${rooms}" th:href="@{'/hk/room/' + ${r.id}}" class="console-btn">
+                            <i class="bi bi-door-closed"></i>
+                            <span class="mono" th:text="${r.roomNo}">8801</span>
+                            <span class="badge-soft" th:classappend="${r.status.color}"
+                                  th:text="${r.status.label}">空闲</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-brush me-2 text-primary"></i>我的待办工单</h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:90px">房间</th>
+                            <th style="width:110px">类型</th>
+                            <th style="width:110px">状态</th>
+                            <th>备注</th>
+                            <th style="width:110px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="t : ${myTasks}">
+                            <td class="mono" th:text="${t.room.roomNo}">8801</td>
+                            <td th:text="${t.type.label}">走客房</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${t.status.color}"
+                                      th:text="${t.status.label}">待完成</span>
+                            </td>
+                            <td class="text-muted-sm" th:text="${t.remark} ?: '—'">—</td>
+                            <td>
+                                <a th:href="@{'/housekeeping/tasks/' + ${t.id}}"
+                                   class="btn btn-sm btn-outline-primary">去处理</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${myTasks.isEmpty()}">
+                            <td colspan="5">
+                                <div class="empty-state"><i class="bi bi-check2-circle"></i>没有派给我的待办</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('清洁标准')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('checklists')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('清洁标准检查单', '把「一间房该做什么」拆成可打勾的条目；派工单创建时按此生成执行清单')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">检查项总数</div>
+                            <div class="stat-value" th:text="${items.size()}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">启用中</div>
+                            <div class="stat-value" th:text="${enabledCount}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+                <div class="card-header">
+                    <h2><i class="bi bi-plus-circle me-2 text-primary"></i>新增检查项</h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/checklists}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-lg-4">
+                                <label class="form-label">检查项名称</label>
+                                <input type="text" class="form-control" name="itemName" maxlength="120" required
+                                       placeholder="如：清洁浴室镜面水渍">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">分类</label>
+                                <select class="form-select" name="category">
+                                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">适用类型</label>
+                                <select class="form-select" name="taskType">
+                                    <option value="">通用（所有房）</option>
+                                    <option th:each="t : ${taskTypes}" th:value="${t}" th:text="${t.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">排序号</label>
+                                <input type="number" class="form-control" name="sortOrder" min="0" value="0">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>新增
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card" th:each="g : ${grouped}">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi me-2 text-primary" th:classappend="${g.key.icon}"></i>
+                        <span th:text="${g.key.label}">卫生</span>
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${g.value.size()} + ' 项'">共 0 项</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:70px">排序</th>
+                            <th>检查项</th>
+                            <th style="width:130px">适用类型</th>
+                            <th style="width:110px">状态</th>
+                            <th style="width:110px">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${g.value}" th:classappend="${!i.enabled} ? 'text-muted-sm'">
+                            <td class="mono" th:text="${i.sortOrder}">0</td>
+                            <td>
+                                <div th:text="${i.itemName}">检查项</div>
+                                <div class="text-muted-sm" th:if="${i.note}" th:text="${i.note}">说明</div>
+                            </td>
+                            <td class="text-muted-sm"
+                                th:text="${i.taskType == null ? '通用' : i.taskType.label}">通用</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.enabled} ? 'success' : 'secondary'"
+                                      th:text="${i.enabled ? '启用' : '停用'}">启用</span>
+                            </td>
+                            <td>
+                                <form sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                                      th:action="@{'/checklists/' + ${i.id} + '/toggle'}" method="post" class="d-inline">
+                                    <input type="hidden" name="enabled" th:value="${!i.enabled}">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary"
+                                            th:text="${i.enabled ? '停用' : '启用'}">停用</button>
+                                </form>
+                                <form sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                                      th:action="@{'/checklists/' + ${i.id} + '/delete'}" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" th:if="${items.isEmpty()}">
+                <div class="card-body">
+                    <div class="empty-state"><i class="bi bi-card-checklist"></i>还没有检查项，先新增一条吧</div>
+                </div>
+            </div>
+
+            <p class="text-muted-sm mt-3">
+                修改或删除模板<b>不会影响</b>已生成的派工清单——清单保存的是生成当时的条目快照，
+                这样历史工单永远能还原「当时按什么标准做的」。
+            </p>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

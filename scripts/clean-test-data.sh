@@ -7,6 +7,9 @@
 #   2. 删除订单本身
 #   3. 若订单占用的房间已无其它有效订单（BOOKED / CHECKED_IN），
 #      且房态被测试改成了「已入住 / 待清洁」，则恢复为「空闲」
+#   4. 房态兜底：① 无在住订单却显示「已入住」的脏数据直接还原；
+#      ② 「换房」遗留的旧房（订单已改指新房，不再被任何订单引用）按演示基线白名单复位
+#         —— 基线非空闲房只有 606（维修中）、607（待清洁）
 #
 # 用法：
 #   bash scripts/clean-test-data.sh                 # 直接执行
@@ -51,6 +54,76 @@ HAS5_LAUNDRY="$(has5 laundry_order)"
 HAS5_LINEN="$(has5 linen_stock)"
 HAS5_INSPECTION="$(has5 room_inspection)"
 HAS5_CONSUMABLE="$(has5 consumable_item)"
+
+# 第七批（客房主管 / 排班 / 清洁检查单 / 耗材台账 / 现场上报 / 布草外送）的表。
+#
+# ⚠️ 外键依赖顺序（这一块的位置不是随便放的）：
+#   task_checklist.task_id  → housekeeping_task ：必须先删检查单，再删下面的派工单；
+#   supply_movement.item_id → supply_item       ：必须先删流水，再删台账；
+#   outsource_item.batch_id → outsource_batch   ：必须先删明细，再删批次。
+# 一旦顺序颠倒，DELETE 会撞外键约束而整体失败（run() 把 stderr 丢弃，会静默漏删）。
+has7() { # $1=表名 → 1/0
+  local n
+  n="$(run "SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = DATABASE() AND table_name = '$1';" \
+       | grep -E '^[0-9]+' | head -1 | tr -dc '0-9')"
+  [ "${n:-0}" = "1" ] && echo 1 || echo 0
+}
+HAS7_TASKCHECK="$(has7 task_checklist)"
+HAS7_DUTY="$(has7 duty_schedule)"
+HAS7_SUPPLY="$(has7 supply_item)"
+HAS7_OUTSOURCE="$(has7 outsource_batch)"
+
+if [ "$HAS7_TASKCHECK" = "1" ]; then
+  # 测试派工单的检查单快照：按 task_id 反查（task_checklist 里没有「测试」字样可依），
+  # 必须早于下面那句 DELETE FROM housekeeping_task。
+  run "DELETE tc FROM task_checklist tc
+       JOIN housekeeping_task t ON tc.task_id = t.id
+       WHERE t.remark LIKE '%测试%';"
+else
+  echo "（跳过 task_checklist：当前库尚未创建）"
+fi
+
+if [ "$HAS7_DUTY" = "1" ]; then
+  # 排班按测试备注清理；另用「测试专用日期」（今天 +30 天）兜底——
+  # 该日期基线为空且日常无人使用，即便上一轮中断留下无备注的残排也能收干净。
+  run "DELETE FROM duty_schedule
+       WHERE remark LIKE '%测试%'
+          OR work_date = DATE_ADD(CURDATE(), INTERVAL 30 DAY);"
+else
+  echo "（跳过 duty_schedule：当前库尚未创建）"
+fi
+
+if [ "$HAS7_OUTSOURCE" = "1" ]; then
+  # 关键：仍在「已送出」状态的测试批次，布草还挂在「洗涤中」，
+  # 直接删批次会把数量永久留在洗涤中（在库凭空少一批）。先把数量退回在库再删。
+  # 已收回 / 已结算 / 已取消的批次，库存早前已回补，不能再退。
+  run "UPDATE linen_stock ls
+       JOIN outsource_item oi ON oi.linen_stock_id = ls.id
+       JOIN outsource_batch ob ON oi.batch_id = ob.id
+       SET ls.in_wash  = GREATEST(0, ls.in_wash - oi.quantity),
+           ls.in_stock = ls.in_stock + oi.quantity
+       WHERE ob.status = 'SENT'
+         AND (ob.vendor LIKE '%测试%' OR ob.remark LIKE '%测试%');"
+  run "DELETE oi FROM outsource_item oi
+       JOIN outsource_batch ob ON oi.batch_id = ob.id
+       WHERE ob.vendor LIKE '%测试%' OR ob.remark LIKE '%测试%';"
+  run "DELETE FROM outsource_batch
+       WHERE vendor LIKE '%测试%' OR remark LIKE '%测试%';"
+else
+  echo "（跳过 outsource_batch：当前库尚未创建）"
+fi
+
+if [ "$HAS7_SUPPLY" = "1" ]; then
+  # 耗材：先删测试品名的流水（外键），再删台账。
+  # 种子 12 个品名与它们的「建档初始入库」流水一律保留。
+  run "DELETE sm FROM supply_movement sm
+       JOIN supply_item si ON sm.item_id = si.id
+       WHERE si.item_name LIKE '%测试%';"
+  run "DELETE FROM supply_item WHERE item_name LIKE '%测试%';"
+else
+  echo "（跳过 supply_item：当前库尚未创建）"
+fi
 
 # 客房部表：先清理迷你吧挂账（外键指向 reservation）与工单，再删订单
 if [ "$HAS_TABLES" = "4" ]; then
@@ -100,6 +173,52 @@ if [ "$HAS5_INSPECTION" = "1" ]; then
                          WHERE v.room_id = r.id AND v.status IN ('BOOKED','CHECKED_IN'));"
 fi
 
+# 第六批（收款流水 / 发票 / 交接班 / 房价方案）的表。
+# payment_record 与 invoice 的外键分别指向 reservation 与 bill，
+# 必须在下面删除订单与账单**之前**清理，否则会撞外键约束。
+has6() { # $1=表名 → 1/0
+  local n
+  n="$(run "SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = DATABASE() AND table_name = '$1';" \
+       | grep -E '^[0-9]+' | head -1 | tr -dc '0-9')"
+  [ "${n:-0}" = "1" ] && echo 1 || echo 0
+}
+HAS6_PAYMENT="$(has6 payment_record)"
+HAS6_INVOICE="$(has6 invoice)"
+HAS6_SHIFT="$(has6 shift_handover)"
+HAS6_RATEPLAN="$(has6 rate_plan)"
+
+if [ "$HAS6_PAYMENT" = "1" ]; then
+  run "DELETE FROM payment_record
+       WHERE remark LIKE '%测试%'
+          OR reservation_id IN (SELECT id FROM reservation WHERE remark LIKE '%测试%')
+          OR bill_id IN (SELECT b.id FROM bill b
+                         JOIN reservation r ON b.reservation_id = r.id
+                         WHERE r.remark LIKE '%测试%');"
+else
+  echo "（跳过 payment_record：当前库尚未创建）"
+fi
+if [ "$HAS6_INVOICE" = "1" ]; then
+  run "DELETE FROM invoice
+       WHERE title LIKE '%测试%'
+          OR tax_no LIKE '%测试%'
+          OR bill_id IN (SELECT b.id FROM bill b
+                         JOIN reservation r ON b.reservation_id = r.id
+                         WHERE r.remark LIKE '%测试%');"
+else
+  echo "（跳过 invoice：当前库尚未创建）"
+fi
+if [ "$HAS6_SHIFT" = "1" ]; then
+  # 交接班快照是测试固化的临时数据，按备注清理（种子/正式交班记录不含「测试」）
+  run "DELETE FROM shift_handover WHERE remark LIKE '%测试%';"
+else
+  echo "（跳过 shift_handover：当前库尚未创建）"
+fi
+if [ "$HAS6_RATEPLAN" = "1" ]; then
+  # 只删测试新建的方案；种子方案（CORP-* / MEMBER-*）保留
+  run "DELETE FROM rate_plan WHERE code LIKE 'TEST-%' OR name LIKE '%测试%';"
+fi
+
 run "
 CREATE TEMPORARY TABLE tmp_test_res AS
   SELECT id, room_id FROM reservation WHERE remark LIKE '%测试%';
@@ -138,6 +257,20 @@ WHERE r.status = 'OCCUPIED'
                   WHERE v.room_id = r.id AND v.status = 'CHECKED_IN');
 "
 
+# 再兜底：「换房」会把**旧房**置为待清洁，而订单已经改指新房 —— 旧房从此不被任何订单引用，
+# 上一条按「测试订单房间」反查的语句永远看不到它，会永久残留。
+# 这里按「演示基线的非空闲房」做白名单，其余没有有效订单的非空闲房一律复位为空闲。
+# 基线（DataInitializer 种子）：606 维修中、607 待清洁；201/302/402/502 由在住订单撑着，
+# 会被上面的 NOT EXISTS 条件自动跳过，无需列入。
+run "
+UPDATE room r
+SET r.status = 'AVAILABLE'
+WHERE r.status <> 'AVAILABLE'
+  AND r.room_no NOT IN ('606', '607')
+  AND NOT EXISTS (SELECT 1 FROM reservation v
+                  WHERE v.room_id = r.id AND v.status IN ('BOOKED', 'CHECKED_IN'));
+"
+
 echo
 echo "=== 清理后的数据概览 ==="
 run "
@@ -170,6 +303,34 @@ UNION ALL SELECT 'linen_stock', COUNT(*) FROM linen_stock
 UNION ALL SELECT 'consumable_item', COUNT(*) FROM consumable_item
 UNION ALL SELECT 'room_inspection', COUNT(*) FROM room_inspection
 UNION ALL SELECT 'room-with-scan-token', COUNT(*) FROM room WHERE scan_token IS NOT NULL;
+"
+fi
+if [ "$HAS6_PAYMENT" = "1" ] || [ "$HAS6_INVOICE" = "1" ] || [ "$HAS6_SHIFT" = "1" ] || [ "$HAS6_RATEPLAN" = "1" ]; then
+  echo
+  echo "=== 第六批模块表概览 ==="
+  run "
+SELECT 'payment_record' AS item, COUNT(*) AS cnt FROM payment_record
+UNION ALL SELECT 'invoice', COUNT(*) FROM invoice
+UNION ALL SELECT 'shift_handover', COUNT(*) FROM shift_handover
+UNION ALL SELECT 'rate_plan', COUNT(*) FROM rate_plan
+UNION ALL SELECT 'unpaid-bills(应收)', COUNT(*) FROM bill WHERE status = 'UNPAID';
+"
+fi
+if [ "$HAS7_TASKCHECK" = "1" ] || [ "$HAS7_DUTY" = "1" ] || [ "$HAS7_SUPPLY" = "1" ] || [ "$HAS7_OUTSOURCE" = "1" ]; then
+  echo
+  echo "=== 第七批模块表概览 ==="
+  echo "（基线：checklist_item 15 项 / supply_item 12 品名 / duty_schedule 0 / outsource_batch 0；"
+  echo "  linen_stock 洗涤中应全为 0，否则说明有测试外送批次未收干净）"
+  run "
+SELECT 'checklist_item' AS item, COUNT(*) AS cnt FROM checklist_item
+UNION ALL SELECT 'supply_item', COUNT(*) FROM supply_item
+UNION ALL SELECT 'supply_movement', COUNT(*) FROM supply_movement
+UNION ALL SELECT 'duty_schedule', COUNT(*) FROM duty_schedule
+UNION ALL SELECT 'outsource_batch', COUNT(*) FROM outsource_batch
+UNION ALL SELECT 'outsource_item', COUNT(*) FROM outsource_item
+UNION ALL SELECT 'task_checklist', COUNT(*) FROM task_checklist
+UNION ALL SELECT 'supervisor(账号)', COUNT(*) FROM sys_user WHERE role = 'HOUSEKEEPING_SUPERVISOR';
+SELECT 'linen 洗涤中合计' AS item, IFNULL(SUM(in_wash), 0) AS cnt FROM linen_stock;
 "
 fi
 echo

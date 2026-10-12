@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('排班与工作量')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('schedule')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('排班与工作量', '上半：某天三班次谁当值；下半：某区间按人统计派工数、完成率与平均耗时')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/housekeeping/schedule}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">排班日期</label>
+                            <input type="date" class="form-control" name="date" style="width:170px"
+                                   th:value="${date}">
+                        </div>
+                        <div>
+                            <label class="form-label">统计区间（起）</label>
+                            <input type="date" class="form-control" name="from" style="width:170px"
+                                   th:value="${from}">
+                        </div>
+                        <div>
+                            <label class="form-label">统计区间（止）</label>
+                            <input type="date" class="form-control" name="to" style="width:170px"
+                                   th:value="${to}">
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/housekeeping/schedule}" class="btn btn-outline-secondary">回到今天</a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-8">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h2>
+                                <i class="bi bi-calendar-week me-2 text-primary"></i>
+                                <span th:text="${#temporals.format(date,'yyyy-MM-dd')}">2026-10-11</span> 排班
+                            </h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4" th:each="s : ${shifts}">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong th:text="${s.label}">早班</strong>
+                                        <span class="text-muted-sm" th:text="${s.timeRange}">08:00–16:00</span>
+                                    </div>
+                                    <div th:if="${rotation.get(s).isEmpty()}" class="text-muted-sm mb-2">未排班</div>
+                                    <div th:each="d : ${rotation.get(s)}"
+                                         class="d-flex justify-content-between align-items-center mb-2 p-2"
+                                         style="border:1px solid var(--border);border-radius:10px">
+                                        <div>
+                                            <div th:text="${d.staff.realName}">姓名</div>
+                                            <div class="text-muted-sm" th:text="${d.remark} ?: ''">备注</div>
+                                        </div>
+                                        <form sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')"
+                                              th:action="@{'/housekeeping/schedule/' + ${d.id} + '/delete'}" method="post">
+                                            <input type="hidden" name="date" th:value="${date}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="取消排班">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                    <div class="card h-100" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+                        <div class="card-header">
+                            <h2><i class="bi bi-plus-circle me-2 text-primary"></i>新增排班</h2>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/housekeeping/schedule}" method="post">
+                                <div class="mb-2">
+                                    <label class="form-label">日期</label>
+                                    <input type="date" class="form-control" name="workDate" required
+                                           th:value="${date}">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">班次</label>
+                                    <select class="form-select" name="shift">
+                                        <option th:each="s : ${shifts}" th:value="${s.name()}"
+                                                th:text="${s.label} + '（' + ${s.timeRange} + '）'"></option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">当值人员</label>
+                                    <select class="form-select" name="staffId" required>
+                                        <option value="">请选择</option>
+                                        <option th:each="u : ${staff}" th:value="${u.id}"
+                                                th:text="${u.realName} + '（' + ${u.role.label} + '）'"></option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">备注</label>
+                                    <input type="text" class="form-control" name="remark" maxlength="200"
+                                           placeholder="如：负责 6 层">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-calendar-plus me-1"></i>登记排班
+                                </button>
+                            </form>
+                            <p class="text-muted-sm mt-3 mb-0">
+                                只能给启用状态的客房服务员与客房主管排班；同一人同一班次不会重复排。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-graph-up me-2 text-primary"></i>工作量统计
+                        <span class="text-muted-sm ms-2"
+                              th:text="${#temporals.format(from,'MM-dd')} + ' ~ ' + ${#temporals.format(to,'MM-dd')}">区间</span>
+                        <span class="text-muted-sm ms-2" th:text="'区间派出合计 ' + ${totalAssigned} + ' 单'"></span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:150px">人员</th>
+                            <th style="width:110px">角色</th>
+                            <th style="width:90px">派出</th>
+                            <th style="width:90px">已完成</th>
+                            <th style="width:90px">验收通过</th>
+                            <th style="width:90px">被打回</th>
+                            <th style="width:150px">完成率</th>
+                            <th style="width:130px">平均耗时</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="w : ${workload}" th:classappend="${w.idle} ? 'text-muted-sm'">
+                            <td th:text="${w.staffName}">姓名</td>
+                            <td class="text-muted-sm" th:text="${w.roleLabel}">客房服务</td>
+                            <td class="mono" th:text="${w.assigned}">0</td>
+                            <td class="mono" th:text="${w.done}">0</td>
+                            <td class="mono" th:text="${w.approved}">0</td>
+                            <td class="mono" th:text="${w.rejected}">0</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="workload-bar flex-grow-1">
+                                        <span th:style="'width:' + ${w.completionRate} + '%'"></span>
+                                    </div>
+                                    <span class="text-muted-sm mono" th:text="${w.completionRate} + '%'">0%</span>
+                                </div>
+                            </td>
+                            <td class="text-muted-sm" th:text="${w.avgText}">—</td>
+                        </tr>
+                        <tr th:if="${workload.isEmpty()}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-graph-up"></i>暂无客房部人员</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body py-2">
+                    <p class="text-muted-sm mb-0">
+                        口径：以<b>派工时间</b>落入统计区间为准；平均耗时 = 标记完成时间 − 派工时间。
+                        被排班但无派工的人员也会列出（显示为灰色），方便看谁在闲置。
+                    </p>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

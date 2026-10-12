@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -102,6 +103,34 @@ public class Reservation extends BaseEntity {
     @Column(length = 200)
     private String remark;
 
+    /** 团队 / 团名（第六批）：同团订单用同一团名归档，便于批量办理入住 */
+    @Size(max = 60)
+    @Column(name = "group_name", length = 60)
+    private String groupName;
+
+    /** 房价方案（第六批：协议价 / 会员价）；为空表示按门市价计价 */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "rate_plan_id")
+    private RatePlan ratePlan;
+
+    /** 下单时锁定的方案名快照（方案改名 / 停用不影响历史订单展示） */
+    @Size(max = 60)
+    @Column(name = "rate_plan_name", length = 60)
+    private String ratePlanName;
+
+    /** 下单时的门市价（房型基准价）快照，用于展示「门市价 vs 折后价」 */
+    @Column(name = "list_price", precision = 10, scale = 2)
+    private BigDecimal listPrice;
+
+    /** 延迟退房档位（第六批） */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "late_checkout_tier", length = 20)
+    private LateCheckoutTier lateCheckoutTier;
+
+    /** 延迟退房加收金额（元），退房时计入账单房费侧 */
+    @Column(name = "late_checkout_fee", nullable = false, precision = 10, scale = 2)
+    private BigDecimal lateCheckoutFee = BigDecimal.ZERO;
+
     /** 计划住店晚数（离店日期 − 入住日期） */
     public long getNightCount() {
         if (checkInDate == null || checkOutDate == null) {
@@ -174,5 +203,35 @@ public class Reservation extends BaseEntity {
     /** 是否可以取消 */
     public boolean isCancelAllowed() {
         return status == ReservationStatus.BOOKED;
+    }
+
+    /** 是否使用了房价方案（协议价 / 会员价） */
+    public boolean hasRatePlan() {
+        return ratePlan != null || (ratePlanName != null && !ratePlanName.isBlank());
+    }
+
+    /**
+     * 每间夜的房价优惠额 = 门市价 − 实际房价。
+     * <p>用于在订单与账单上展示「门市价 ￥X，协议价 ￥Y，每晚省 ￥Z」。
+     */
+    public BigDecimal getRateDiscountPerNight() {
+        if (listPrice == null || unitPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal diff = listPrice.subtract(unitPrice);
+        return diff.signum() > 0 ? diff : BigDecimal.ZERO;
+    }
+
+    /** 是否发生了延迟退房加收 */
+    public boolean isLateCheckout() {
+        return lateCheckoutFee != null && lateCheckoutFee.signum() > 0;
+    }
+
+    /** 房价方案展示名：优先方案名，其次「门市价」 */
+    public String getRatePlanLabel() {
+        if (ratePlan != null) {
+            return ratePlan.getName();
+        }
+        return ratePlanName == null || ratePlanName.isBlank() ? "门市价" : ratePlanName;
     }
 }

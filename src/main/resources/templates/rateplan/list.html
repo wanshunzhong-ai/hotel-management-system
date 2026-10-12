@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('房价方案')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('rate-plans')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('房价方案', '协议价与会员价的统一维护')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                <i class="bi bi-info-circle me-1"></i>
+                把「打几折」固化成带编码的方案后，价格可预期、可追溯。下单时选中方案即按方案计价；
+                方案<b>停用</b>后不能再被新订单选用，但历史订单上的价目快照不受影响。
+            </div>
+
+            <div class="stat-grid mb-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-primary"><i class="bi bi-tags"></i></div>
+                    <div>
+                        <div class="stat-label">方案总数</div>
+                        <div class="stat-value" th:text="${#lists.size(plans)}">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-soft-success"><i class="bi bi-check2-circle"></i></div>
+                    <div>
+                        <div class="stat-label">启用中</div>
+                        <div class="stat-value" th:text="${enabledCount}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-tags me-2 text-primary"></i>方案清单</h2>
+                    <a th:href="@{/rate-plans/new}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i>新建方案
+                    </a>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:150px">方案编码</th>
+                            <th>方案名称</th>
+                            <th style="width:100px">类型</th>
+                            <th style="width:130px">优惠</th>
+                            <th style="width:110px">会员等级</th>
+                            <th style="width:90px">状态</th>
+                            <th>说明</th>
+                            <th style="width:150px" class="text-end">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="p : ${plans}">
+                            <td class="mono" th:text="${p.code}">CORP-YUNQI</td>
+                            <td><b th:text="${p.name}">云企协议价</b></td>
+                            <td><span class="badge-soft" th:classappend="${p.type.color}" th:text="${p.type.label}">协议价</span></td>
+                            <td class="money" th:text="${p.discountLabel}">—</td>
+                            <td th:text="${p.memberLevel} ?: '—'">—</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${p.enabled} ? 'success' : 'secondary'"
+                                      th:text="${p.enabled} ? '启用' : '停用'">启用</span>
+                            </td>
+                            <td class="text-muted-sm" th:text="${p.note} ?: '—'">—</td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-1">
+                                    <a th:href="@{/rate-plans/{id}/edit(id=${p.id})}"
+                                       class="btn btn-sm btn-outline-secondary" title="编辑">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form th:action="@{/rate-plans/{id}/toggle(id=${p.id})}" method="post">
+                                        <input type="hidden" name="enabled" th:value="${!p.enabled}">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary"
+                                                th:title="${p.enabled} ? '停用' : '启用'">
+                                            <i th:class="${p.enabled} ? 'bi bi-pause-circle' : 'bi bi-play-circle'"></i>
+                                        </button>
+                                    </form>
+                                    <form th:action="@{/rate-plans/{id}/delete(id=${p.id})}" method="post"
+                                          data-confirm="确定删除该房价方案吗？历史订单不受影响，但之后不能再选它。">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(plans)}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-tags"></i>还没有房价方案，点右上「新建方案」添加协议价或会员价</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -108,7 +108,7 @@
                             <th style="width:90px">账单</th>
                             <th style="width:100px">操作人</th>
                             <th style="width:130px">时间</th>
-                            <th style="width:90px">操作</th>
+                            <th style="width:200px">操作</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -133,10 +133,16 @@
                             <td class="text-muted-sm mono"
                                 th:text="${i.createdAt == null ? '—' : #temporals.format(i.createdAt,'MM-dd HH:mm')}">—</td>
                             <td>
-                                <form th:if="${i.status.name() == 'PENDING'}"
-                                      th:action="@{'/housekeeping/minibar/' + ${i.id} + '/delete'}" method="post"
-                                      onsubmit="return confirm('确认取消这条挂账？')">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">取消</button>
+                                <!-- 撤销挂账等于给客人退钱：必须填原因；客房部只显示自己录入的那几笔 -->
+                                <form th:if="${i.status.name() == 'PENDING'
+                                              and (canUndoOthers or i.operator == currentName)}"
+                                      th:action="@{'/housekeeping/minibar/' + ${i.id} + '/delete'}" method="post">
+                                    <div class="d-flex gap-1">
+                                        <input type="text" class="form-control form-control-sm" name="reason"
+                                               placeholder="撤销原因（必填）" required maxlength="100"
+                                               style="min-width:110px">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">取消</button>
+                                    </div>
                                 </form>
                             </td>
                         </tr>

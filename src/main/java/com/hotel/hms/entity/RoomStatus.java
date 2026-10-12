@@ -43,6 +43,16 @@ public enum RoomStatus {
      */
     private static final List<RoomStatus> PHYSICAL = List.of(AVAILABLE, OCCUPIED, CLEANING, MAINTENANCE);
 
+    /**
+     * 「变更房态」入口<b>允许写入</b>的状态（第八批缺口 6）。
+     *
+     * <p>不含 {@link #OCCUPIED}：「已入住」是<b>办理入住</b>这个业务动作的结果，
+     * 不能由「改房态」凭空产生——否则一间空房被标成已入住后既没有订单支撑，
+     * 又直接吃掉可售房量；而且按「在住只能转待清洁」的约束还得绕两步才能复原。
+     * 房态图、客房列表、房间表单与移动端操作台的房态控件一律以本列表为准。
+     */
+    private static final List<RoomStatus> CHANGEABLE = List.of(AVAILABLE, CLEANING, MAINTENANCE);
+
     private final String label;
     /** Bootstrap 色板后缀 */
     private final String color;
@@ -59,9 +69,19 @@ public enum RoomStatus {
         return PHYSICAL;
     }
 
+    /** 「变更房态」入口允许写入的状态列表——不含「已入住」（见 {@link #CHANGEABLE}）。 */
+    public static List<RoomStatus> changeable() {
+        return CHANGEABLE;
+    }
+
     /** 是否为收敛后的物理状态（用于兜底过滤脏数据）。 */
     public boolean isPhysical() {
         return PHYSICAL.contains(this);
+    }
+
+    /** 是否允许通过「变更房态」入口写入（「已入住」只能由办理入住产生）。 */
+    public boolean isChangeable() {
+        return CHANGEABLE.contains(this);
     }
 
     /** 物理上是否处于「可以直接开房」的闲置状态。待清洁需先完成清洁，因此不算。 */

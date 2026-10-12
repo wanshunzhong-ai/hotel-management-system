@@ -99,6 +99,20 @@
                                         th:text="${#temporals.format(bill.reservation.checkInDate,'yyyy-MM-dd')} + ' 至 ' + ${#temporals.format(bill.reservation.checkOutDate,'yyyy-MM-dd')}">—</td>
                                     <td th:if="${bill.status.name() == 'UNPAID'}"></td>
                                 </tr>
+                                <tr th:if="${bill.isLateCheckout}">
+                                    <td>
+                                        <b>延迟退房加收</b>
+                                        <div class="text-muted-sm"
+                                             th:text="${bill.reservation.lateCheckoutTier == null ? ''
+                                                      : bill.reservation.lateCheckoutTier.label}">—</div>
+                                    </td>
+                                    <td class="text-end money">—</td>
+                                    <td class="text-center">—</td>
+                                    <td class="text-end money"
+                                        th:text="'￥' + ${#numbers.formatDecimal(bill.lateCheckoutFee, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                                    <td class="text-muted-sm">房费侧加收</td>
+                                    <td th:if="${bill.status.name() == 'UNPAID'}"></td>
+                                </tr>
                                 <tr th:each="it : ${bill.items}">
                                     <td th:text="${it.itemName}">迷你吧饮品</td>
                                     <td class="text-end money"
@@ -132,6 +146,12 @@
                                     <td class="text-end money" style="color:#0f9d58"
                                         th:text="'-￥' + ${#numbers.formatDecimal(bill.earlyCheckoutDiscount, 1, 'COMMA', 2, 'POINT')}">—</td>
                                     <td colspan="2" class="text-muted-sm">已体现在房费中</td>
+                                </tr>
+                                <tr style="background:#f8fafc" th:if="${bill.isLateCheckout}">
+                                    <td colspan="3" class="text-end">其中延迟退房加收</td>
+                                    <td class="text-end money"
+                                        th:text="'+￥' + ${#numbers.formatDecimal(bill.lateCheckoutFee, 1, 'COMMA', 2, 'POINT')}">—</td>
+                                    <td colspan="2" class="text-muted-sm">计入应收合计</td>
                                 </tr>
                                 <tr style="background:#f8fafc">
                                     <td colspan="3" class="text-end"><b>其他消费</b></td>
@@ -242,7 +262,13 @@
                                 <div class="mb-3">
                                     <label class="form-label" for="deposit">已收押金（元）</label>
                                     <input type="number" step="0.01" min="0" class="form-control" id="deposit"
-                                           name="deposit" value="0.00" oninput="recalc()">
+                                           name="deposit"
+                                           th:value="${#numbers.formatDecimal(ledgerDeposit, 1, 'COMMA', 2, 'POINT')}"
+                                           oninput="recalc()">
+                                    <div class="text-muted-sm mt-1">
+                                        默认取收款流水净额（押金 + 预订金 − 已退）。
+                                        如与账面不符可手工下调；上调会被记为「补录押金」。
+                                    </div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label" for="paidAmount">本次收款（元）</label>
@@ -312,6 +338,137 @@
                                 <span th:text="${bill.settledAt == null ? '—' : #temporals.format(bill.settledAt,'yyyy-MM-dd HH:mm')}">—</span></div>
                             <div class="d-flex justify-content-between"><span>操作人</span>
                                 <span th:text="${bill.operator} ?: '—'">—</span></div>
+                        </div>
+                    </div>
+
+                    <!-- 应收账款登记（第六批）：未结账单可登记挂账单位，纳入应收台账 -->
+                    <div class="card mb-3" th:if="${bill.status.name() == 'UNPAID'}"
+                         sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                        <div class="card-header">
+                            <h2><i class="bi bi-journal-check me-2 text-primary"></i>应收账款（挂账）</h2>
+                            <span class="badge-soft primary" th:if="${bill.credited}"
+                                  th:text="${bill.creditAccount}">—</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted-sm mb-2">
+                                协议单位月结时在此登记挂账单位与约定回款日；账单会出现在「应收账款台账」里，
+                                逾期未收会高亮。结清后账单转「已结账」，自动从台账消失。
+                            </p>
+                            <form th:action="@{/receivables/{id}/credit(id=${bill.id})}" method="post">
+                                <div class="mb-3">
+                                    <label class="form-label" for="creditAccount">挂账单位</label>
+                                    <input type="text" class="form-control" id="creditAccount" name="creditAccount"
+                                           list="creditList" maxlength="100" th:value="${bill.creditAccount}"
+                                           placeholder="留空表示取消挂账登记">
+                                    <datalist id="creditList">
+                                        <option th:each="a : ${creditAccounts}" th:value="${a}"></option>
+                                    </datalist>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="creditDueDate">约定回款日</label>
+                                    <input type="date" class="form-control" id="creditDueDate" name="creditDueDate"
+                                           th:value="${bill.creditDueDate == null ? '' : bill.creditDueDate}">
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+                                    <i class="bi bi-check2 me-1"></i>保存挂账登记
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- 发票管理（第六批）：结账后可开票，累计不得超过应收 -->
+                    <div class="card mb-3" th:if="${bill.status.name() == 'SETTLED'}"
+                         sec:authorize="hasAnyRole('ADMIN','RECEPTION')">
+                        <div class="card-header">
+                            <h2><i class="bi bi-receipt-cutoff me-2 text-primary"></i>发票管理</h2>
+                            <span class="text-muted-sm"
+                                  th:text="'可开 ￥' + ${#numbers.formatDecimal(remainingAmount, 1, 'COMMA', 2, 'POINT')}">—</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-1 text-muted-sm">
+                                <span>应收合计</span>
+                                <span class="money"
+                                      th:text="'￥' + ${#numbers.formatDecimal(bill.totalAmount, 1, 'COMMA', 2, 'POINT')}">￥0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 text-muted-sm">
+                                <span>已开票</span>
+                                <span class="money"
+                                      th:text="'￥' + ${#numbers.formatDecimal(issuedAmount, 1, 'COMMA', 2, 'POINT')}">￥0</span>
+                            </div>
+
+                            <div th:if="${!#lists.isEmpty(invoices)}" class="mb-3">
+                                <div class="text-muted-sm mb-1">已开票记录</div>
+                                <div th:each="iv : ${invoices}" class="d-flex align-items-center gap-2 mb-1">
+                                    <a class="mono" th:href="@{/invoices/{id}/print(id=${iv.id})}"
+                                       th:text="${iv.invoiceNo}">IV—</a>
+                                    <span class="text-muted-sm" th:text="${iv.type.shortLabel} + ' · ' + ${iv.title}">—</span>
+                                    <span class="money ms-auto"
+                                          th:classappend="${iv.cancelled} ? 'text-muted-sm' : ''"
+                                          th:text="'￥' + ${#numbers.formatDecimal(iv.amount, 1, 'COMMA', 2, 'POINT')}">￥0</span>
+                                    <span class="badge-soft secondary" th:if="${iv.cancelled}">已作废</span>
+                                    <form th:if="${!iv.cancelled}"
+                                          th:action="@{/invoices/{id}/cancel(id=${iv.id})}" method="post"
+                                          data-confirm="确认作废该发票？作废后金额不再占用可开额度。">
+                                        <input type="hidden" name="reason" value="前台在账单页作废">
+                                        <input type="hidden" name="billId" th:value="${bill.id}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="作废">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <form th:action="@{/invoices}" method="post"
+                                  th:if="${remainingAmount.signum() > 0}">
+                                <input type="hidden" name="billId" th:value="${bill.id}">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label" for="invType">票种</label>
+                                        <select class="form-select form-select-sm" id="invType" name="type">
+                                            <option th:each="t : ${invoiceTypes}" th:value="${t}"
+                                                    th:text="${t.label}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label" for="invAmount">开票金额</label>
+                                        <input type="number" step="0.01" min="0.01" class="form-control form-control-sm"
+                                               id="invAmount" name="amount"
+                                               th:value="${#numbers.formatDecimal(remainingAmount, 1, 'COMMA', 2, 'POINT')}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label required" for="invTitle">发票抬头</label>
+                                        <input type="text" class="form-control form-control-sm" id="invTitle"
+                                               name="title" maxlength="100" required
+                                               th:value="${bill.customer.name}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="invTaxNo">纳税人识别号</label>
+                                        <input type="text" class="form-control form-control-sm" id="invTaxNo"
+                                               name="taxNo" maxlength="40" placeholder="专票必填">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label" for="invContent">开票内容</label>
+                                        <input type="text" class="form-control form-control-sm" id="invContent"
+                                               name="content" maxlength="100" value="住宿费">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label" for="invPhone">联系电话</label>
+                                        <input type="text" class="form-control form-control-sm" id="invPhone"
+                                               name="buyerPhone" maxlength="30" th:value="${bill.customer.phone}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="invAddress">地址</label>
+                                        <input type="text" class="form-control form-control-sm" id="invAddress"
+                                               name="buyerAddress" maxlength="200">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">
+                                    <i class="bi bi-receipt-cutoff me-1"></i>开具发票
+                                </button>
+                            </form>
+                            <div class="text-muted-sm mt-2" th:if="${remainingAmount.signum() <= 0}">
+                                该账单可开额度已用尽。
+                            </div>
                         </div>
                     </div>
 

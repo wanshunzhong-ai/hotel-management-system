@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('耗材出入库')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('supplies')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('客房耗材出入库', '六小件 / 清洁用品 / 纸品等内部物料的库存与流水；库存低于安全线自动预警')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">在册品名</div>
+                            <div class="stat-value" th:text="${items.size()}">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <div class="stat-label">低于安全库存</div>
+                            <div class="stat-value" th:classappend="${belowMin > 0} ? 'text-danger'"
+                                 th:text="${belowMin}">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3" sec:authorize="hasAnyRole('ADMIN','RECEPTION','HOUSEKEEPING_SUPERVISOR')">
+                <div class="card-header">
+                    <h2><i class="bi bi-plus-circle me-2 text-primary"></i>新增耗材（建档并入库）</h2>
+                </div>
+                <div class="card-body">
+                    <form th:action="@{/supplies}" method="post">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-lg-3">
+                                <label class="form-label">品名</label>
+                                <input type="text" class="form-control" name="itemName" maxlength="100" required
+                                       placeholder="如：浴帽">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">分类</label>
+                                <select class="form-select" name="category">
+                                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c.label}"></option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-lg-1">
+                                <label class="form-label">单位</label>
+                                <input type="text" class="form-control" name="unit" maxlength="20" placeholder="个">
+                            </div>
+                            <div class="col-6 col-lg-1">
+                                <label class="form-label">初始库存</label>
+                                <input type="number" class="form-control" name="stock" min="0" value="0">
+                            </div>
+                            <div class="col-6 col-lg-1">
+                                <label class="form-label">安全库存</label>
+                                <input type="number" class="form-control" name="minStock" min="0" value="0">
+                            </div>
+                            <div class="col-6 col-lg-2">
+                                <label class="form-label">参考单价</label>
+                                <input type="number" step="0.01" class="form-control" name="unitCost" min="0"
+                                       value="0">
+                            </div>
+                            <div class="col-12 col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>建档入库
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h2><i class="bi bi-box-seam me-2 text-primary"></i>耗材台账</h2>
+                    <span class="text-muted-sm">入库 / 领用 / 报废三态，另支持盘点调整（数量可填负数表示盘亏）</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:190px">品名</th>
+                            <th style="width:110px">分类</th>
+                            <th style="width:80px">库存</th>
+                            <th style="width:90px">安全库存</th>
+                            <th style="width:90px">参考单价</th>
+                            <th style="width:100px">状态</th>
+                            <th>出入库</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="i : ${items}" th:style="${i.belowMin} ? 'background:#fff7f7' : ''">
+                            <td>
+                                <a th:href="@{'/supplies/' + ${i.id}}" th:text="${i.itemName}">品名</a>
+                            </td>
+                            <td class="text-muted-sm" th:text="${i.category.label}">客房六小件</td>
+                            <td class="mono">
+                                <span th:text="${i.stock}">0</span>
+                                <span class="text-muted-sm" th:text="${i.unit} ?: '件'">个</span>
+                            </td>
+                            <td class="mono text-muted-sm" th:text="${i.minStock}">0</td>
+                            <td class="text-muted-sm" th:text="'￥' + ${#numbers.formatDecimal(i.unitCost, 1, 2)}">￥0.00</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${i.belowMin} ? 'danger' : 'success'"
+                                      th:text="${i.belowMin ? '需补货' : '正常'}">正常</span>
+                                <span class="badge-soft secondary" th:if="${!i.enabled}">已停用</span>
+                            </td>
+                            <td>
+                                <form th:if="${i.enabled}" th:action="@{'/supplies/' + ${i.id} + '/move'}"
+                                      method="post" class="d-flex gap-1 flex-wrap">
+                                    <select class="form-select form-select-sm" name="type" style="width:112px">
+                                        <option value="IN">入库</option>
+                                        <option value="OUT">领用</option>
+                                        <option value="SCRAP">报废</option>
+                                        <option value="ADJUST">盘点调整</option>
+                                    </select>
+                                    <input type="number" class="form-control form-control-sm" name="quantity"
+                                           style="width:88px" placeholder="数量" required>
+                                    <input type="text" class="form-control form-control-sm" name="target"
+                                           style="width:120px" placeholder="去向 / 房间">
+                                    <button type="submit" class="btn btn-sm btn-primary">登记</button>
+                                </form>
+                                <span th:unless="${i.enabled}" class="text-muted-sm">已停用</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${items.isEmpty()}">
+                            <td colspan="7">
+                                <div class="empty-state"><i class="bi bi-box-seam"></i>还没有耗材台账</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-clock-history me-2 text-primary"></i>最近出入库流水</h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th style="width:140px">时间</th>
+                            <th style="width:170px">品名</th>
+                            <th style="width:90px">类型</th>
+                            <th style="width:80px">数量</th>
+                            <th style="width:90px">变动后库存</th>
+                            <th style="width:140px">去向</th>
+                            <th style="width:100px">经手人</th>
+                            <th>备注</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="m : ${recent}">
+                            <td class="mono text-muted-sm"
+                                th:text="${#temporals.format(m.movedAt,'MM-dd HH:mm')}">—</td>
+                            <td th:text="${m.item.itemName}">品名</td>
+                            <td>
+                                <span class="badge-soft" th:classappend="${m.type.color}"
+                                      th:text="${m.type.label}">入库</span>
+                            </td>
+                            <td class="mono" th:text="${m.quantity}">0</td>
+                            <td class="mono text-muted-sm" th:text="${m.stockAfter}">0</td>
+                            <td class="text-muted-sm" th:text="${m.target} ?: '—'">—</td>
+                            <td class="text-muted-sm" th:text="${m.operator}">—</td>
+                            <td class="text-muted-sm" th:text="${m.remark} ?: '—'">—</td>
+                        </tr>
+                        <tr th:if="${recent.isEmpty()}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-clock-history"></i>暂无出入库记录</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

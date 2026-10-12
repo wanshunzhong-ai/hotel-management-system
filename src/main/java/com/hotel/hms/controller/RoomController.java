@@ -12,6 +12,7 @@ import com.hotel.hms.service.RoomTypeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -52,6 +53,7 @@ public class RoomController {
         model.addAttribute("types", roomTypeService.findAll());
         model.addAttribute("floors", roomService.findAllFloors());
         model.addAttribute("statuses", RoomStatus.physical());
+        model.addAttribute("changeableStatuses", RoomStatus.changeable());
         model.addAttribute("keyword", keyword);
         model.addAttribute("status", status);
         model.addAttribute("roomTypeId", roomTypeId);
@@ -86,6 +88,7 @@ public class RoomController {
         model.addAttribute("soldCount", sold);
         model.addAttribute("boardStates", BoardState.displayOrder());
         model.addAttribute("statuses", RoomStatus.physical());
+        model.addAttribute("changeableStatuses", RoomStatus.changeable());
         model.addAttribute("active", "room-board");
         return "room/board";
     }
@@ -97,6 +100,7 @@ public class RoomController {
         model.addAttribute("room", room);
         model.addAttribute("types", roomTypeService.findEnabled());
         model.addAttribute("statuses", RoomStatus.physical());
+        model.addAttribute("changeableStatuses", RoomStatus.changeable());
         model.addAttribute("active", "rooms");
         return "room/form";
     }
@@ -106,15 +110,25 @@ public class RoomController {
         model.addAttribute("room", roomService.getById(id));
         model.addAttribute("types", roomTypeService.findEnabled());
         model.addAttribute("statuses", RoomStatus.physical());
+        model.addAttribute("changeableStatuses", RoomStatus.changeable());
         model.addAttribute("active", "rooms");
         return "room/form";
     }
 
+    /**
+     * 新增 / 修改客房。
+     *
+     * <p>这里额外加动作级注解是<b>双保险</b>：URL 层已在 {@code SecurityConfig} 里拦了
+     * {@code /rooms/save}，但 matcher 是顺序匹配的，日后有人调整顺序就可能重新漏掉——
+     * 权限声明贴在被保护的方法上更不容易被改坏。
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPTION')")
     @PostMapping("/save")
     public String save(@Valid Room room, BindingResult binding, Model model, RedirectAttributes ra) {
         if (binding.hasErrors()) {
             model.addAttribute("types", roomTypeService.findEnabled());
             model.addAttribute("statuses", RoomStatus.physical());
+            model.addAttribute("changeableStatuses", RoomStatus.changeable());
             model.addAttribute("active", "rooms");
             return "room/form";
         }

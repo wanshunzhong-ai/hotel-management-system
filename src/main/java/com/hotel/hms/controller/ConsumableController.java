@@ -45,14 +45,17 @@ public class ConsumableController {
     @GetMapping
     public String page(Model model) {
         Map<Long, String> qrUrls = new LinkedHashMap<>();
+        Map<Long, String> staffUrls = new LinkedHashMap<>();
         for (Room room : roomService.findAll()) {
             String token = consumableService.tokenOf(room);
             qrUrls.put(room.getId(), scanUrl(token));
+            staffUrls.put(room.getId(), staffScanUrl(token));
         }
         model.addAttribute("items", consumableService.list());
         model.addAttribute("categories", ConsumableCategory.values());
         model.addAttribute("rooms", roomService.findAll());
         model.addAttribute("qrUrls", qrUrls);
+        model.addAttribute("staffUrls", staffUrls);
         model.addAttribute("enabledCount", consumableService.countEnabled());
         model.addAttribute("active", "consumables");
         return "consumables/list";
@@ -136,11 +139,37 @@ public class ConsumableController {
                 .body(png);
     }
 
+    /**
+     * 员工码（第七批）：同一把房间令牌，但指向<b>需登录</b>的客房部操作台 {@code /hk/scan/{token}}。
+     *
+     * <p>与对客二维码的区别只在落地页：住客码进免登录点单页，员工码进需登录的现场操作台。
+     * 令牌本身共用，因此重置一次，两张码同时失效——不会再出现「客人那页作废了、员工那页还能用」。
+     */
+    @GetMapping("/rooms/{roomId}/staff-qr.png")
+    public ResponseEntity<byte[]> staffQr(@PathVariable Long roomId,
+                                          @RequestParam(defaultValue = "240") int size) {
+        Room room = roomService.getById(roomId);
+        String token = consumableService.tokenOf(room);
+        byte[] png = qrCodeService.png(staffScanUrl(token), size);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.noStore())
+                .body(png);
+    }
+
     // ---------------- 内部 ----------------
 
     private String scanUrl(String token) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .replacePath("/scan/" + token)
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+    }
+
+    private String staffScanUrl(String token) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .replacePath("/hk/scan/" + token)
                 .replaceQuery(null)
                 .build()
                 .toUriString();

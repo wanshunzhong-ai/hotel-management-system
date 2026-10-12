@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('打印发票')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('invoices')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('打印发票', '票面信息预览，浏览器打印或另存为 PDF')}"></header>
+        <main class="app-content">
+
+            <div class="card mb-3 no-print">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印 / 另存 PDF
+                    </button>
+                    <a th:href="@{/invoices}" class="btn btn-outline-secondary">返回发票列表</a>
+                    <a th:href="@{/bills/{id}(id=${invoice.bill.id})}" class="btn btn-outline-secondary">查看账单</a>
+                </div>
+            </div>
+
+            <div class="alert alert-warning py-2 mb-3 no-print" style="font-size:13px"
+                 th:if="${invoice.cancelled}">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                该发票已于 <span th:text="${#temporals.format(invoice.cancelledAt,'yyyy-MM-dd HH:mm')}">—</span>
+                作废，原因：<span th:text="${invoice.cancelReason}">—</span>。
+            </div>
+
+            <div class="card print-sheet">
+                <div class="card-body">
+                    <div class="print-head">
+                        <div>
+                            <div class="print-hotel" th:text="${hotelName}">云栖大酒店</div>
+                            <div class="text-muted-sm" th:text="${invoice.type.label} + ' / INVOICE'">增值税普通发票</div>
+                        </div>
+                        <div class="text-end text-muted-sm">
+                            <div class="mono" th:text="${invoice.invoiceNo}">IV—</div>
+                            <div th:text="'开票日期 ' + ${#temporals.format(invoice.issuedAt,'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="print-grid">
+                        <div><span class="text-muted-sm">发票抬头</span><b th:text="${invoice.title}">—</b></div>
+                        <div><span class="text-muted-sm">纳税人识别号</span>
+                            <span class="mono" th:text="${invoice.taxNo} ?: '—'">—</span></div>
+                        <div><span class="text-muted-sm">开票内容</span><span th:text="${invoice.content}">住宿费</span></div>
+                        <div><span class="text-muted-sm">关联账单</span>
+                            <span class="mono" th:text="${invoice.bill.billNo}">BL—</span></div>
+                        <div><span class="text-muted-sm">客人</span><span th:text="${invoice.bill.customer.name}">—</span></div>
+                        <div><span class="text-muted-sm">住店区间</span>
+                            <span th:text="${#temporals.format(invoice.bill.reservation.checkInDate,'yyyy-MM-dd')}
+                                           + ' → ' + ${#temporals.format(invoice.bill.reservation.checkOutDate,'yyyy-MM-dd')}">—</span></div>
+                        <div th:if="${invoice.buyerPhone}"><span class="text-muted-sm">联系电话</span>
+                            <span th:text="${invoice.buyerPhone}">—</span></div>
+                        <div th:if="${invoice.buyerAddress}"><span class="text-muted-sm">地址</span>
+                            <span th:text="${invoice.buyerAddress}">—</span></div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <table class="table print-table">
+                        <thead>
+                        <tr>
+                            <th>项目</th>
+                            <th class="text-center" style="width:90px">数量</th>
+                            <th class="text-end" style="width:160px">金额</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td th:text="${invoice.content}">住宿费</td>
+                            <td class="text-center">1</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tbody>
+                        <tfoot>
+                        <tr>
+                            <td colspan="2" class="text-end"><b>价税合计</b></td>
+                            <td class="text-end money print-total"
+                                th:text="'￥' + ${#numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="print-grid mt-3">
+                        <div><span class="text-muted-sm">开票人</span>
+                            <span th:text="${invoice.operator} ?: '—'">—</span></div>
+                        <div><span class="text-muted-sm">状态</span>
+                            <b th:text="${invoice.cancelled} ? '已作废' : '有效'">有效</b></div>
+                        <div th:if="${invoice.remark}"><span class="text-muted-sm">备注</span>
+                            <span th:text="${invoice.remark}">—</span></div>
+                    </div>
+
+                    <div class="print-foot">
+                        本单据由 <span th:text="${hotelName}">云栖大酒店</span> 管理系统生成 ·
+                        仅登记票面信息，不作税控开具凭证
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

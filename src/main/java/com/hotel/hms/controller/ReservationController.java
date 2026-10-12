@@ -9,10 +9,14 @@ import com.hotel.hms.dto.CustomerOption;
 import com.hotel.hms.dto.ReservationForm;
 import com.hotel.hms.entity.Gender;
 import com.hotel.hms.entity.IdType;
+import com.hotel.hms.entity.LateCheckoutTier;
+import com.hotel.hms.entity.PayMethod;
 import com.hotel.hms.entity.Reservation;
 import com.hotel.hms.entity.ReservationStatus;
 import com.hotel.hms.entity.Room;
 import com.hotel.hms.service.CustomerService;
+import com.hotel.hms.service.PaymentService;
+import com.hotel.hms.service.RatePlanService;
 import com.hotel.hms.service.ReservationService;
 import com.hotel.hms.service.RoomService;
 import jakarta.validation.Valid;
@@ -76,6 +80,8 @@ public class ReservationController {
     private final CustomerService customerService;
     private final RoomService roomService;
     private final BookingPolicy bookingPolicy;
+    private final PaymentService paymentService;
+    private final RatePlanService ratePlanService;
 
     @GetMapping
     public String list(@RequestParam(required = false) String keyword,
@@ -177,7 +183,18 @@ public class ReservationController {
 
     @GetMapping("/{id}")
     public String detail(@PathVariable Long id, Model model) {
-        model.addAttribute("reservation", reservationService.getById(id));
+        Reservation reservation = reservationService.getById(id);
+        model.addAttribute("reservation", reservation);
+        // 押金 / 预订金收退（第六批）：余额与流水都来自收款流水表
+        model.addAttribute("payments", paymentService.listByReservation(id));
+        model.addAttribute("prepaymentNet", paymentService.prepaymentNet(id));
+        model.addAttribute("depositBalance", paymentService.depositBalance(id));
+        model.addAttribute("payMethods", PayMethod.values());
+        model.addAttribute("lateTiers", LateCheckoutTier.values());
+        // 换房候选（排除当前房间）
+        model.addAttribute("rooms", roomService.findAll().stream()
+                .filter(r -> !r.getId().equals(reservation.getRoom().getId()))
+                .toList());
         model.addAttribute("active", "reservations");
         return "reservation/detail";
     }
@@ -211,6 +228,7 @@ public class ReservationController {
         form.setCheckOutDate(reservation.getCheckOutDate());
         form.setGuestCount(reservation.getGuestCount());
         form.setRemark(reservation.getRemark());
+        form.setRatePlanId(reservation.getRatePlan() == null ? null : reservation.getRatePlan().getId());
         model.addAttribute("form", form);
         model.addAttribute("reservation", reservation);
         prepareForm(model, form);
@@ -296,6 +314,65 @@ public class ReservationController {
         }
     }
 
+    /**
+     * 换房（第六批）。
+     *
+     * <p>在住客人换房走这个动作而不是「改单」：改单只允许「已预订」状态，
+     * 住客在住期间换房原先只能手工改房态，没有任何留痕。
+     */
+    @PostMapping("/{id}/change-room")
+    public String changeRoom(@PathVariable Long id,
+                             @RequestParam Long newRoomId,
+                             @RequestParam(required = false) String reason,
+                             @AuthenticationPrincipal LoginUser loginUser,
+                             RedirectAttributes ra) {
+        try {
+            Reservation saved = reservationService.changeRoom(id, newRoomId, reason, operatorOf(loginUser));
+            ra.addFlashAttribute("successMessage",
+                    "换房完成，" + saved.getRoom().getRoomNo() + " · 房价 ￥" + saved.getUnitPrice()
+                            + (saved.getStatus().name().equals("CHECKED_IN")
+                            ? "；原房间已转「待清洁」，新房已转「已入住」" : ""));
+        } catch (BusinessException ex) {
+            ra.addFlashAttribute("errorMessage", ex.getMessage());
+        }
+        return "redirect:/reservations/" + id;
+    }
+
+    /** 登记延迟退房（第六批）：加收金额在下单时算好，退房生成账单时自动计入房费侧 */
+    @PostMapping("/{id}/late-checkout")
+    public String lateCheckout(@PathVariable Long id,
+                               @RequestParam(required = false) LateCheckoutTier tier,
+                               @RequestParam(required = false) java.math.BigDecimal customFee,
+                               @AuthenticationPrincipal LoginUser loginUser,
+                               RedirectAttributes ra) {
+        try {
+            Reservation saved = reservationService.applyLateCheckout(id, tier, customFee, operatorOf(loginUser));
+            ra.addFlashAttribute("successMessage", saved.getLateCheckoutFee().signum() > 0
+                    ? "已登记延迟退房：" + saved.getLateCheckoutTier().getLabel()
+                            + "，加收 ￥" + saved.getLateCheckoutFee() + "（退房时自动计入账单房费侧）"
+                    : "已取消延迟退房加收");
+        } catch (BusinessException ex) {
+            ra.addFlashAttribute("errorMessage", ex.getMessage());
+        }
+        return "redirect:/reservations/" + id;
+    }
+
+    /** 给单个订单打团名 / 移出团队（第六批：团队入住） */
+    @PostMapping("/{id}/group")
+    public String assignGroup(@PathVariable Long id,
+                              @RequestParam(required = false) String groupName,
+                              @AuthenticationPrincipal LoginUser loginUser,
+                              RedirectAttributes ra) {
+        try {
+            Reservation saved = reservationService.assignGroup(id, groupName, operatorOf(loginUser));
+            ra.addFlashAttribute("successMessage", saved.getGroupName() == null
+                    ? "已将该订单移出团队" : "已归入团队「" + saved.getGroupName() + "」");
+        } catch (BusinessException ex) {
+            ra.addFlashAttribute("errorMessage", ex.getMessage());
+        }
+        return "redirect:/reservations/" + id;
+    }
+
     @PostMapping("/{id}/delete")
     public String delete(@PathVariable Long id,
                          @AuthenticationPrincipal LoginUser loginUser,
@@ -353,6 +430,23 @@ public class ReservationController {
         model.addAttribute("genders", Gender.values());
         model.addAttribute("idTypes", IdType.values());
         model.addAttribute("memberLevels", MEMBER_LEVELS);
+        // 房价方案（协议价 / 会员价）：选了就按方案计价，不选按门市价
+        model.addAttribute("ratePlans", ratePlanService.enabled());
+        // 会员等级 → 方案名，供前端在选定客户后自动带出对应的会员价
+        Map<String, String> memberPlanNames = new LinkedHashMap<>();
+        for (com.hotel.hms.entity.RatePlan plan : ratePlanService.enabled()) {
+            if (plan.getType() == com.hotel.hms.entity.RatePlanType.MEMBER && plan.getMemberLevel() != null) {
+                memberPlanNames.putIfAbsent(plan.getMemberLevel(), plan.getName());
+            }
+        }
+        Map<String, Long> memberPlanIds = new LinkedHashMap<>();
+        for (com.hotel.hms.entity.RatePlan plan : ratePlanService.enabled()) {
+            if (plan.getType() == com.hotel.hms.entity.RatePlanType.MEMBER && plan.getMemberLevel() != null) {
+                memberPlanIds.putIfAbsent(plan.getMemberLevel(), plan.getId());
+            }
+        }
+        model.addAttribute("memberPlanNames", memberPlanNames);
+        model.addAttribute("memberPlanIds", memberPlanIds);
 
         if (form != null && form.getCustomerId() != null) {
             try {

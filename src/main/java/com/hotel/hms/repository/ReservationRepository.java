@@ -48,6 +48,39 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     long countCheckedInBetween(@Param("start") java.time.LocalDateTime start,
                                @Param("end") java.time.LocalDateTime end);
 
+    /** 区间内实际退房数（交接班核对工作量用） */
+    @Query("""
+            select count(r) from Reservation r
+            where r.checkOutTime >= :start and r.checkOutTime < :end
+            """)
+    long countCheckedOutBetween(@Param("start") java.time.LocalDateTime start,
+                                @Param("end") java.time.LocalDateTime end);
+
+    /** 同一团名下的订单（团队批量入住） */
+    @Query("""
+            select r from Reservation r
+            where r.groupName = :groupName
+            order by r.room.roomNo asc
+            """)
+    List<Reservation> findByGroupName(@Param("groupName") String groupName);
+
+    /** 已建团的团名清单（团队工作台的团名下拉） */
+    @Query("""
+            select distinct r.groupName from Reservation r
+            where r.groupName is not null and r.groupName <> ''
+            order by r.groupName asc
+            """)
+    List<String> findDistinctGroupNames();
+
+    /** 指定日期入住、且尚未办理入住的订单（团队批量入住候选） */
+    @Query("""
+            select r from Reservation r
+            where r.checkInDate = :date
+              and r.status = com.hotel.hms.entity.ReservationStatus.BOOKED
+            order by r.room.roomNo asc
+            """)
+    List<Reservation> findPendingArrivalsOn(@Param("date") LocalDate date);
+
     /** 在住订单 */
     @Query("""
             select r from Reservation r

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('收款流水')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('payments')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('收款流水', '押金收退与结账收款的逐笔台账')}"></header>
+        <main class="app-content">
+            <div th:replace="~{fragments/layout :: flash}"></div>
+
+            <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+                <i class="bi bi-info-circle me-1"></i>
+                这里记录每一笔「客人给钱 / 酒店退钱」。账单上的押金不再是手工填写，而是本页流水的汇总净额；
+                交班时「当班收了多少现金」也由本页按时间段汇总得出。
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <form th:action="@{/payments}" method="get" class="filter-bar">
+                        <div>
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                                   placeholder="订单号 / 姓名 / 房号" style="width:210px">
+                        </div>
+                        <div>
+                            <label class="form-label">流水类型</label>
+                            <select class="form-select" name="type" style="width:150px">
+                                <option value="">全部类型</option>
+                                <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"
+                                        th:selected="${type != null && type == t}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">支付方式</label>
+                            <select class="form-select" name="method" style="width:140px">
+                                <option value="">全部方式</option>
+                                <option th:each="m : ${methods}" th:value="${m}" th:text="${m.label}"
+                                        th:selected="${method != null && method == m}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">发生日期</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="date" class="form-control" name="from" style="width:150px"
+                                       th:value="${from}">
+                                <span class="text-muted-sm">~</span>
+                                <input type="date" class="form-control" name="to" style="width:150px"
+                                       th:value="${to}">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">排序</label>
+                            <select class="form-select" name="sort" style="width:170px">
+                                <option th:each="e : ${sortLabels}" th:value="${e.key}" th:text="${e.value}"
+                                        th:selected="${sort == e.key}"></option>
+                            </select>
+                        </div>
+                        <input type="hidden" name="size" th:value="${page.size}">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>查询</button>
+                        <a th:href="@{/payments}" class="btn btn-outline-secondary">重置</a>
+                        <a th:href="@{/payments/export(keyword=${keyword}, type=${type}, method=${method},
+                                                     from=${from}, to=${to}, sort=${sort})}"
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-download me-1"></i>导出 CSV
+                        </a>
+                        <a th:href="@{/shift}" class="btn btn-accent ms-auto">
+                            <i class="bi bi-arrow-left-right me-1"></i>去交接班对账
+                        </a>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>
+                        <i class="bi bi-cash-stack me-2 text-primary"></i>收款流水
+                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${page.totalElements} + ' 笔'">—</span>
+                    </h2>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sticky-first">
+                        <thead>
+                        <tr>
+                            <th style="width:150px">发生时间</th>
+                            <th style="width:120px">类型</th>
+                            <th>订单 / 客户</th>
+                            <th style="width:100px">房间</th>
+                            <th class="text-end" style="width:120px">金额</th>
+                            <th style="width:110px">支付方式</th>
+                            <th style="width:100px">操作人</th>
+                            <th>备注</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="p : ${page.content}">
+                            <td class="mono text-muted-sm"
+                                th:text="${p.occurredAt == null ? '—' : #temporals.format(p.occurredAt,'yyyy-MM-dd HH:mm')}">—</td>
+                            <td>
+                                <span class="badge-soft"
+                                      th:classappend="${p.type.income} ? 'success' : 'danger'">
+                                    <i th:class="'bi ' + ${p.type.icon} + ' me-1'"></i>
+                                    <span th:text="${p.type.label}">收取押金</span>
+                                </span>
+                            </td>
+                            <td>
+                                <a class="mono" th:href="@{/reservations/{id}(id=${p.reservation.id})}"
+                                   th:text="${p.reservation.orderNo}">RS202610100001</a>
+                                <div class="text-muted-sm" th:text="${p.reservation.customer.name}">张伟</div>
+                            </td>
+                            <td class="mono" th:text="${p.reservation.room.roomNo}">201</td>
+                            <td class="text-end money fw-bold"
+                                th:classappend="${p.type.income} ? 'text-success' : 'text-danger'"
+                                th:text="${(p.type.income ? '+' : '-') + '￥' + #numbers.formatDecimal(p.amount, 1, 'COMMA', 2, 'POINT')}">
+                                +￥0
+                            </td>
+                            <td th:text="${p.payMethod == null ? '—' : p.payMethod.label}">现金</td>
+                            <td th:text="${p.operator} ?: '—'">—</td>
+                            <td class="text-muted-sm" th:text="${p.remark} ?: '—'">—</td>
+                        </tr>
+                        <tr th:if="${page.totalElements == 0}">
+                            <td colspan="8">
+                                <div class="empty-state"><i class="bi bi-cash-stack"></i>还没有收款记录，收取押金或办理结账后会出现</div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:replace="~{fragments/pagination :: pager(${page}, ${pageNumbers}, ${pageBase}, ${sizeBase}, ${sizes})}"></div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

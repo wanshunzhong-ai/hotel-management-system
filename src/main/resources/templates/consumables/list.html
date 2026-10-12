@@ -111,7 +111,7 @@
                 <div class="card-header">
                     <h2>
                         <i class="bi bi-qr-code me-2 text-primary"></i>房间二维码
-                        <span class="text-muted-sm ms-2" th:text="'共 ' + ${rooms.size()} 间'">共 0 间</span>
+                        <span class="text-muted-sm ms-2" th:text="|共 ${rooms.size()} 间|">共 0 间</span>
                     </h2>
                     <div class="d-flex align-items-center gap-2">
                         <span class="text-muted-sm">住客扫码即进入下单页，无需登录</span>
@@ -128,6 +128,10 @@
                                  alt="房间二维码" th:alt="'房间 ' + ${r.roomNo} + ' 二维码'">
                             <div class="qr-link mono text-muted-sm"
                                  th:text="${qrUrls.get(r.id)}">http://…/scan/…</div>
+                            <a th:href="${staffUrls.get(r.id)}" class="btn btn-sm btn-outline-primary w-100 mb-1"
+                               title="员工用：需登录，直达该房现场操作台">
+                                <i class="bi bi-phone me-1"></i>员工入口
+                            </a>
                             <form th:action="@{'/consumables/rooms/' + ${r.id} + '/reset-token'}" method="post"
                                   onsubmit="return confirm('重置后打印在房间里的旧二维码将立即失效，确认？')"
                                   sec:authorize="hasAnyRole('ADMIN','RECEPTION')">

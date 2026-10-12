@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('打印交班单')}"></head>
+<body>
+<div class="app-shell">
+    <aside th:replace="~{fragments/layout :: sidebar('shift')}"></aside>
+    <div class="app-main">
+        <header th:replace="~{fragments/layout :: topbar('打印交班单', '交班双方签字确认，留档备查')}"></header>
+        <main class="app-content">
+
+            <div class="card mb-3 no-print">
+                <div class="card-body py-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i>打印 / 另存 PDF
+                    </button>
+                    <a th:href="@{/shift}" class="btn btn-outline-secondary">返回交接班</a>
+                </div>
+            </div>
+
+            <div class="card print-sheet">
+                <div class="card-body">
+                    <div class="print-head">
+                        <div>
+                            <div class="print-hotel" th:text="${hotelName}">云栖大酒店</div>
+                            <div class="text-muted-sm">前台交接班对账单 / SHIFT HANDOVER</div>
+                        </div>
+                        <div class="text-end text-muted-sm">
+                            <div class="mono" th:text="${record.shiftNo}">SH—</div>
+                            <div th:text="'打印时间 ' + ${#temporals.format(#temporals.createNow(),'yyyy-MM-dd HH:mm')}">—</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="print-grid">
+                        <div><span class="text-muted-sm">值班日期</span><b th:text="${record.shiftDate}">—</b></div>
+                        <div><span class="text-muted-sm">交班人</span><b th:text="${record.operator} ?: '—'">—</b></div>
+                        <div><span class="text-muted-sm">接班人</span><b th:text="${record.receivedBy} ?: '—'">—</b></div>
+                        <div><span class="text-muted-sm">现金点清</span>
+                            <b th:text="${record.cashVerified} ? '是' : '否'">否</b></div>
+                        <div><span class="text-muted-sm">统计区间起</span>
+                            <span class="mono" th:text="${#temporals.format(record.fromTime,'yyyy-MM-dd HH:mm')}">—</span></div>
+                        <div><span class="text-muted-sm">统计区间止</span>
+                            <span class="mono" th:text="${#temporals.format(record.toTime,'yyyy-MM-dd HH:mm')}">—</span></div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <table class="table print-table">
+                        <thead>
+                        <tr>
+                            <th>项目</th>
+                            <th class="text-end" style="width:160px">金额</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td>现金</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.cashAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td>微信支付</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.wechatAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td>支付宝</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.alipayAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td>银行卡</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.bankCardAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td>其他</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.otherAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tbody>
+                        <tfoot>
+                        <tr>
+                            <td class="text-end"><b>当班净收款</b></td>
+                            <td class="text-end money print-total"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.totalReceived, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td class="text-end">其中 押金 + 预订金</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.depositInAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td class="text-end">其中 退款 / 找零</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.refundAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        <tr>
+                            <td class="text-end">其中 结账收款</td>
+                            <td class="text-end money"
+                                th:text="'￥' + ${#numbers.formatDecimal(record.settleAmount, 1, 'COMMA', 2, 'POINT')}">￥0</td>
+                        </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="print-grid mt-3">
+                        <div><span class="text-muted-sm">办理入住</span>
+                            <b th:text="${record.checkInCount} + ' 单'">0 单</b></div>
+                        <div><span class="text-muted-sm">办理退房</span>
+                            <b th:text="${record.checkOutCount} + ' 单'">0 单</b></div>
+                        <div><span class="text-muted-sm">涉及订单</span>
+                            <b th:text="${record.orderCount} + ' 单'">0 单</b></div>
+                        <div th:if="${record.remark}"><span class="text-muted-sm">备注</span>
+                            <span th:text="${record.remark}">—</span></div>
+                    </div>
+
+                    <div class="print-sign">
+                        <div>交班人签名：<span class="sign-line"></span></div>
+                        <div>接班人签名：<span class="sign-line"></span></div>
+                        <div>日期：<span class="sign-line"></span></div>
+                    </div>
+
+                    <div class="print-foot">
+                        本单据由 <span th:text="${hotelName}">云栖大酒店</span> 管理系统生成 ·
+                        净收款 = （押金 + 预订金 + 结账收款）−（退款 + 找零）
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

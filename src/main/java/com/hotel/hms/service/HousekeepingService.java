@@ -28,6 +28,7 @@ public class HousekeepingService {
     private final HousekeepingTaskRepository taskRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final ChecklistService checklistService;
     private final OperationLogService operationLogService;
 
     @Transactional(readOnly = true)
@@ -54,23 +55,35 @@ public class HousekeepingService {
         return taskRepository.countByStatus(status);
     }
 
-    /** 客房服务员名单（派工下拉用） */
+    /** 客房部人员名单（派工下拉用）：客房服务员 + 客房主管 */
     @Transactional(readOnly = true)
     public List<User> listStaff() {
         return userRepository.findAllByOrderByIdAsc().stream()
-                .filter(u -> u.getRole() == Role.HOUSEKEEPING && Boolean.TRUE.equals(u.getEnabled()))
+                .filter(u -> u.getRole() == Role.HOUSEKEEPING
+                        || u.getRole() == Role.HOUSEKEEPING_SUPERVISOR)
+                .filter(u -> Boolean.TRUE.equals(u.getEnabled()))
                 .toList();
     }
 
-    /** 派工 */
+    /**
+     * 派工。
+     *
+     * <p>保存后会按「清洁标准检查单」模板为该单<b>生成执行清单</b>——
+     * 这一步把「标准」落成「这个人这一单要做的几条具体动作」，
+     * 服务员照着勾，主管照着评。
+     */
     @Transactional
     public Long create(Long roomId, TaskType type, Long assigneeId, String remark, String operator) {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException("房间不存在"));
         User assignee = userRepository.findById(assigneeId)
                 .orElseThrow(() -> new BusinessException("服务员不存在"));
-        if (assignee.getRole() != Role.HOUSEKEEPING || !Boolean.TRUE.equals(assignee.getEnabled())) {
-            throw new BusinessException("只能派工给启用状态的客房服务员");
+        if (assignee.getRole() != Role.HOUSEKEEPING
+                && assignee.getRole() != Role.HOUSEKEEPING_SUPERVISOR) {
+            throw new BusinessException("只能派工给启用状态的客房服务员或客房主管");
+        }
+        if (!Boolean.TRUE.equals(assignee.getEnabled())) {
+            throw new BusinessException("只能派工给启用状态的客房服务员或客房主管");
         }
         HousekeepingTask task = new HousekeepingTask();
         task.setRoom(room);
@@ -79,22 +92,29 @@ public class HousekeepingService {
         task.setAssignee(assignee);
         task.setRemark(remark);
         HousekeepingTask saved = taskRepository.save(task);
+        int checklistSize = checklistService.materialize(saved);
         operationLogService.record("派工", "housekeeping_task", saved.getId(),
                 saved.getRoom().getRoomNo() + " · " + saved.getType().getLabel()
-                        + " → " + assignee.getRealName() + (remark == null || remark.isBlank() ? "" : "（" + remark + "）"),
+                        + " → " + assignee.getRealName()
+                        + (checklistSize > 0 ? "（含 " + checklistSize + " 项检查单）" : "")
+                        + (remark == null || remark.isBlank() ? "" : "（" + remark + "）"),
                 operator);
         return saved.getId();
     }
 
-    /** 服务员标记完成（仅本人或管理员） */
+    /** 服务员标记完成（仅本人或管理员/主管）；要求检查单逐项打完勾 */
     @Transactional
-    public void markDone(Long id, Long userId, boolean isAdmin, String operator) {
+    public void markDone(Long id, Long userId, boolean canOperateOthers, String operator) {
         HousekeepingTask task = get(id);
-        if (!isAdmin && (userId == null || !userId.equals(task.getAssignee().getId()))) {
+        if (!canOperateOthers && (userId == null || !userId.equals(task.getAssignee().getId()))) {
             throw new BusinessException("只能标记自己负责的派工单");
         }
         if (task.getStatus() != TaskStatus.PENDING && task.getStatus() != TaskStatus.REJECTED) {
             throw new BusinessException("该派工单当前状态为「" + task.getStatus().getLabel() + "」，不能标记完成");
+        }
+        long unchecked = checklistService.uncheckedCount(id);
+        if (unchecked > 0) {
+            throw new BusinessException("清洁检查单还有 " + unchecked + " 项未打勾，请先逐项确认后再提交");
         }
         task.setStatus(TaskStatus.DONE);
         task.setDoneAt(LocalDateTime.now());
